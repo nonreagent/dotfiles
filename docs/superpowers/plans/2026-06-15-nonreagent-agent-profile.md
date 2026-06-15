@@ -270,10 +270,13 @@ test_identity() {
 test_base_preserved() {
   local tmp; tmp="$(mktemp -d)"
   cp -R "$REPO/exe-dev-home/." "$tmp/" 2>/dev/null || { rm -rf "$tmp"; return 1; }
+  local agents_md="$tmp/.config/shelley/AGENTS.md"
+  # Guard: an empty before/after (missing file) would otherwise compare equal and false-PASS.
+  [ -f "$agents_md" ] || { echo "  exe-dev-home missing .config/shelley/AGENTS.md" >&2; rm -rf "$tmp"; return 1; }
   local before after
-  before="$(shasum "$tmp/.config/shelley/AGENTS.md" | awk '{print $1}')"
+  before="$(shasum "$agents_md" | awk '{print $1}')"
   HOME="$tmp" "$REPO/install.sh" >/dev/null 2>&1 || { rm -rf "$tmp"; return 1; }
-  after="$(shasum "$tmp/.config/shelley/AGENTS.md" | awk '{print $1}')"
+  after="$(shasum "$agents_md" | awk '{print $1}')"
   [ -d "$tmp/.codex" ] || { rm -rf "$tmp"; return 1; }
   rm -rf "$tmp"
   [ "$before" = "$after" ]
