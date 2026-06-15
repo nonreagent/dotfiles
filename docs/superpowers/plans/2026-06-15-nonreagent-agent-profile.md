@@ -457,10 +457,13 @@ while IFS= read -r -d '' file; do
   if [ -L "$d" ]; then
     rm -f "$d"
   elif [ -e "$d" ]; then
+    # Don't clobber an existing backup — it holds the original base-image file.
+    [ -e "$d.bak" ] && { echo "  [skip] $rel already backed up; not overwriting $rel.bak" >&2; continue; }
     mv "$d" "$d.bak"
     echo "  [backup] $rel -> $rel.bak"
   fi
-  ln -s "$file" "$d"
+  # Absolute source: symlinks point at this clone, so `git pull` updates config in place.
+  ln -s "$file" "$d" || { echo "error: failed to link $rel" >&2; exit 1; }
   linked=$((linked + 1))
 done < <(find "$SRC" -type f -print0)
 
