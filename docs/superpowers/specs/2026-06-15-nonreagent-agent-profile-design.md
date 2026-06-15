@@ -62,10 +62,11 @@ Plain text, one path per line (relative to `~/.dotfiles`), `#` comments. Defines
 
 1. Read `manifest`; copy each path from `~/.dotfiles` into `home/` (mirroring relative paths).
 2. Apply the overlay:
-   - **gitconfig split.** Copy `~/.dotfiles/.gitconfig` **verbatim** to `home/.gitconfig.shared`. Write `home/.gitconfig` from `overlay/gitconfig`: `[include] path = ~/.gitconfig.shared` **first**, then the overrides last so they win — `[user] name = Agent Norton`, `email = agent@nonration.al`; `[github] user = nonreagent`; `[commit] gpgsign = false`; `[init] defaultBranch = main`; and `[credential "https://github.com"]` that resets the helper list (`helper =`) then sets `helper = !gh auth git-credential`. Git applies includes/keys in order, last value wins, so aliases/colors/behavior from the shared file carry over while identity + auth flip to the agent.
+   - **gitconfig split.** Copy `~/.dotfiles/.gitconfig` to `home/.gitconfig.shared`, then `--unset` its `user.name`, `user.email`, `github.user`, and `commit.gpgsign` (via `git config -f`) so the shared file carries only aliases/colors/behavior and the overlay is the **sole** identity source. Write `home/.gitconfig` from `overlay/gitconfig`: `[include] path = ~/.gitconfig.shared` **first**, then the overrides last so they win — `[user] name = Agent Norton`, `email = agent@nonration.al`; `[github] user = nonreagent`; `[commit] gpgsign = false`; `[init] defaultBranch = main`; and `[credential "https://github.com"]` that resets the helper list (`helper =`) then sets `helper = !gh auth git-credential`. Git applies includes/keys in order, last value wins, so aliases/colors/behavior from the shared file carry over while identity + auth flip to the agent.
    - **CLAUDE.md.** Write `home/.claude/CLAUDE.md` from `overlay/claude-CLAUDE.md` — imports `language/workflow/markdown/improvement` and `exe.md`, but **not** `macos_interactions`. `macos_interactions.md` is not vendored.
    - **bin.** `bin.Linux/` → `home/bin/`.
-   - **Linux shell snippet.** Append to `home/.bashrc.Linux`: export `XDG_RUNTIME_DIR="/run/user/$(id -u)"` (the one functional thing lost when our `.bash_profile` shadows the base `.profile`) and `BASH_REPORT_MISSING=false` (silences "not added to PATH" noise from missing macOS paths).
+   - **Linux shell snippet.** Append to `home/.bashrc.Linux`: export `XDG_RUNTIME_DIR="/run/user/$(id -u)"` (the one functional thing lost when our `.bash_profile` shadows the base `.profile`).
+   - **Silence path noise.** Patch the vendored `home/.bash_profile` to set `BASH_REPORT_MISSING=false`. The "not added to PATH" checks for missing macOS paths run at login inside `.bash_profile`, *before* `.bashrc.Linux` is sourced, so a snippet there would be too late.
 3. Build is **idempotent**: a second run produces no `git diff`.
 
 ### `overlay/`
@@ -113,9 +114,9 @@ Shell (`.bashrc`, `.bashrc.Linux` + snippet, `.bash_profile`, `.bash_completion`
 ## Error handling & edge cases
 
 - **Identity override correctness:** the `[include]` of `.gitconfig.shared` must come *before* the identity/auth keys; otherwise the shared file's `[user]`/`[commit]` would win. Verified by the identity smoke test.
-- **Harmless gitconfig residue:** `.gitconfig.shared` still carries the 1Password `signingkey`/`op-ssh-sign` program and macOS `gh` credential helper. They never fire because `gpgsign=false` and the credential helper list is reset/overridden. The `~/.local/.gitconfig` and `~/wrk` includes silently no-op when absent.
+- **Harmless gitconfig residue:** after identity is stripped, `.gitconfig.shared` still carries the inert `signingkey`/`op-ssh-sign` program and macOS `gh` credential helper. They never fire because the overlay sets `gpgsign=false` and resets the credential helper list. The `~/.local/.gitconfig` and `~/wrk` includes silently no-op when absent.
 - **`pbcopy`-based git aliases** (`bcp`, etc.) fail harmlessly on Linux; not worth stripping.
-- **`BASH_REPORT_MISSING` noise:** silenced via the Linux snippet. Optional upstream improvement: change the dotfiles guard to `${BASH_REPORT_MISSING:-true}` so an exported value is honored before `.bash_profile` runs.
+- **`BASH_REPORT_MISSING` noise:** the login-time PATH checks live in `.bash_profile` and run before `.bashrc.Linux`, so the build patches the vendored `home/.bash_profile` to set `BASH_REPORT_MISSING=false` directly.
 - **`.claude/ext/mattpocock-skills` submodule:** if any vendored skill references it, the build copies the resolved working-tree contents (no submodule on the VM). Out of scope for v1 unless a vendored skill needs it.
 - **Plugins:** referenced by `settings.json` but their code is not in this repo; installed on the VM via `sync-plugins.sh`.
 - **Installer safety:** backs up non-symlink base files to `.bak`; idempotent re-runs replace its own symlinks only.
@@ -123,7 +124,7 @@ Shell (`.bashrc`, `.bashrc.Linux` + snippet, `.bash_profile`, `.bash_completion`
 ## Verification / success criteria
 
 1. **Idempotency:** `build.sh` run twice → clean `git diff`.
-2. **Secret hygiene:** build fails if `home/` contains `.credentials.json`, tokens, history, or `.local/`.
+2. **Secret hygiene:** build fails if `home/` contains `.credentials.json`, private keys, `.netrc`, history files, `.local/`, or the personal email `git@nonration.al`.
 3. **Identity smoke test:** install into `HOME=$(mktemp -d)` and assert `git config user.email` = `agent@nonration.al` and `git config user.name` = `Agent Norton`.
 4. **Base preservation:** after install over a copy of `exe-dev-home/`, `.config/shelley/AGENTS.md` is unchanged and `.codex/` is untouched.
 
