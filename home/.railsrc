@@ -1,0 +1,5 @@
+--database=postgresql
+--skip-coffee
+--skip-test
+--webpack
+--dummy-path=spec/dummy

@@ -1,0 +1,278 @@
+#!/bin/bash
+
+# Based on Gary Bernhardt's .githelpers
+# https://github.com/garybernhardt/dotfiles/blob/main/.githelpers
+
+# Log output:
+#
+# * 51c333e    (12 days)    <Gary Bernhardt>   add vim-eunuch
+#
+# Branch output:
+#
+# * release/v1.1    (13 days)    <Leyan Lo>   add pretty_git_branch
+#
+# The time massaging regexes start with ^[^<]* because that ensures that they
+# only operate before the first "<". That "<" will be the beginning of the
+# author name, ensuring that we don't destroy anything in the commit message
+# that looks like time.
+#
+# The log format uses } characters between each field, and `column` is later
+# used to split on them. A } in the commit subject or any other field will
+# break this.
+
+LOG_AUTHOR="%C(always,bold blue)<%aN>%C(always,reset)"
+LOG_HASH="%C(always,yellow)%h%C(always,reset)"
+LOG_REFS="%C(always,bold red)%d%C(always,reset)"
+LOG_RELATIVE_TIME="%C(always,green)(%ar)%C(always,reset)"
+LOG_SUBJECT="%s"
+
+LOG_FORMAT="$LOG_HASH^$LOG_RELATIVE_TIME^$LOG_AUTHOR^$LOG_REFS $LOG_SUBJECT"
+
+BRANCH_PREFIX="%(HEAD)"
+BRANCH_REF="%(color:red)%(color:bold)%(refname:short)%(color:reset)"
+BRANCH_HASH="%(color:yellow)%(objectname:short)%(color:reset)"
+BRANCH_DATE="%(color:green)(%(committerdate:relative))%(color:reset)"
+BRANCH_AUTHOR="%(color:blue)%(color:bold)<%(authorname)>%(color:reset)"
+BRANCH_CONTENTS="%(contents:subject)"
+
+BRANCH_FORMAT="$BRANCH_PREFIX^$BRANCH_REF^$BRANCH_HASH^$BRANCH_DATE^$BRANCH_AUTHOR^$BRANCH_CONTENTS"
+
+# Print the name of the "primary" branch, be it main or master.
+remote_origin_primary_branch() {
+  git branch -a | grep 'remotes.origin.\(main\|master\)' | sed 's|.*remotes/||g'
+}
+
+# Get the host of the remote origin
+remote_origin_host() {
+  git remote get-url origin | sed -E -e 's|.*://([^/]+)/.*|\1|' -e 's|.*@([^:]+):.*|\1|'
+}
+
+git_browse_web() {
+  if [ "github.com" == "$(remote_origin_host)" ] && command -v gh > /dev/null; then
+    gh browse
+  else
+    local url=$(git remote get-url origin)
+    url="${url%.git}"
+    if [[ "$url" =~ ^git@ ]]; then
+      url="${url/://}"
+      url="https://${url#git@}"
+    fi
+    echo "Opening $url"
+    open "$url"
+  fi
+}
+
+git_browse_pull_request() {
+  if [ "github.com" == "$(remote_origin_host)" ] && command -v gh > /dev/null; then
+    gh pr view --web || gh browse --branch $(git branch --show-current)
+  else
+    git_browse_web
+  fi
+}
+
+# Show a diff of the most recent commit.
+show_git_head() {
+  pretty_git_log -1
+  git show -p --pretty="tformat:"
+}
+
+pretty_git_log() {
+  git log --graph --pretty="tformat:${LOG_FORMAT}" $* | pretty_git_format | git_page_maybe
+}
+
+pretty_git_branch() {
+  git branch -v --color=always --format=${BRANCH_FORMAT} $* | pretty_git_format
+}
+
+pretty_git_branch_sorted() {
+  git branch -v --format=${BRANCH_FORMAT} --sort=-committerdate $* | head -n${1:-5} | pretty_git_format
+}
+
+pretty_git_format() {
+  # Replace (2 years ago) with (2 years)
+  sed -Ee 's/(^[^<]*) ago\)/\1)/' |
+  # Replace (2 years, 5 months) with (2 years)
+  sed -Ee 's/(^[^<]*), [[:digit:]]+ .*months?\)/\1)/' |
+  # Line columns up based on } delimiter
+  column -s '^' -t
+}
+
+git_page_maybe() {
+  # Page only if we're asked to.
+  if [ -n "$GIT_NO_PAGER" ]; then
+    cat
+  else
+    # Page only if needed.
+    less --quit-if-one-screen --no-init --RAW-CONTROL-CHARS --chop-long-lines
+  fi
+}
+
+# Accepts a pattern and attempts to stage all files that match it.
+add_wildcard() {
+  git ls-files --modified | grep -i $1 | xargs -I{} git add {}
+  git ls-files --others --exclude-standard | grep -i $1 | xargs -I{} git add {}
+  git ls-files --deleted | grep -i $1 | xargs -I{} git rm {}
+}
+
+# Accepts a pattern and discards all changes to files that match it.
+discard_wildcard() {
+  git ls-files --modified | grep -i $1 | xargs -I{} git restore {}
+  git ls-files --deleted | grep -i $1 | xargs -I{} git restore {}
+  git ls-files --others --exclude-standard | grep -i $1 | xargs -I{} rm {}
+}
+
+# Accepts a pattern and removes staged files back to unstaged/untracked.
+reset_wildcard() {
+  git diff --cached --name-only | grep -i $1 | xargs -I{} git restore --staged {}
+}
+
+# Accepts a pattern and switches to the first branch that matches it.
+# Provide the `--all` flag to include remote branches as well.
+switch_wildcard() {
+  local all_branches=false
+  while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case $1 in
+    -a | --all )
+      all_branches=true
+      ;;
+  esac; shift; done
+  if [[ "$1" == '--' ]]; then shift; fi
+
+  if [ -z "$1" ]; then
+    echo "No pattern provided"
+  elif [ "$all_branches" = true ]; then
+    git branch --all --sort=-committerdate | sed 's|remotes/origin/||' | egrep "$1" | head -1 | xargs git switch
+  else
+    git branch --sort=-committerdate | egrep "$1" | head -1 | xargs git switch
+  fi
+}
+
+# Delete local-only branches with confirmation.
+delete_remoteless_branches_interactive() {
+  git fetch origin --prune --tags -f
+  git worktree prune
+
+  main_branch=$(remote_origin_primary_branch)
+  remote_branches=$(git branch --remote | grep "origin" | grep -v "HEAD" | cut -c10- | egrep -v "^${main_branch}$")
+  local_branches=$(git branch | grep -v "HEAD" | cut -c3- | egrep -v "^${main_branch}$")
+
+  for local_branch in $local_branches; do
+    if ! echo "$remote_branches" | grep -q "$local_branch"; then
+      read -p "Delete $local_branch? (y/n): " response
+      if [[ $response =~ ^[Yy] ]]; then
+        local err
+        err=$(git branch -D "$local_branch" 2>&1 >/dev/tty)
+        if [[ -n "$err" ]]; then
+          echo "$err"
+          local wt_path
+          wt_path=$(echo "$err" | sed -n "s/.*used by worktree at '\(.*\)'.*/\1/p")
+          if [[ -n "$wt_path" ]]; then
+            echo "  Removing worktree at $wt_path"
+            git worktree remove --force "$wt_path" 2>/dev/null
+            git worktree prune
+            git branch -D "$local_branch"
+          fi
+        fi
+      fi
+    fi
+  done
+}
+
+# Delete all personally-prefixed non-primary branches with confirmation.
+delete_all_my_branches_interactive() {
+  for branch in $(git branch | egrep '^\W*(aln|anorton)/'); do
+    printf "Delete $branch, both local and origin? (y/[n])";
+    read ans;
+    [[ "$ans" == "y" ]] && git branch -D $branch && git push origin :$branch
+  done
+}
+
+# Delete all non-personally-prefixed, non-primary branches.
+delete_all_others_local_branches() {
+  for branch in $(git branch | grep '/' | egrep -v '^\W*(aln|anorton)/'); do
+    printf "Delete $branch? ";
+    read ans;
+    [[ "$ans" == "y" ]] && git branch -D $branch
+  done
+}
+
+# Accepts a sed substituion (e.g., s/foo/bar/) and applies it to the current branch, also unsetting the upstream branch.
+rename_branch_regex() {
+  if [ -z "$1" ]; then
+    echo "No pattern provided"
+  else
+    local new_name=$(git branch --show-current | sed -e "$1")
+    git branch --unset-upstream 2> /dev/null
+    git branch -m "$new_name"
+    echo "$new_name"
+  fi
+}
+
+# Lists the 10 most recently committed branches, sorted by relative commit time.
+# Highlights the current branch with an asterisk (*) and displays relative time in a concise format.
+list_branches_by_relative_commit() {
+  current_branch=$(git branch --show-current)
+  git for-each-ref refs/heads/ --sort=-committerdate --format='%(refname:short) ~ %(committerdate:relative)' \
+    | awk -F~ '!seen[$1]++' \
+    | head -n 10 \
+    | awk -F' ~ ' '{
+      split($2, time_parts, " ");
+      relative_time = time_parts[1];
+      unit = substr(time_parts[2], 1, 1);
+      prefix = ($1 == "'$current_branch'") ? "*" : " ";
+      printf("%s%-2s %-5s %-s\n", prefix, NR, "-"relative_time unit, $1);
+    }'
+}
+
+# Interactively switch to a recent branch using a selection menu with j/k or arrow keys, and Enter to confirm.
+switch_recent_branches_by_index() {
+  local branches=($(list_branches_by_relative_commit | awk '{print $NF}'))
+  local current_branch=$(git branch --show-current)
+
+  # Use fzf for interactive selection
+  local selected_branch=$(list_branches_by_relative_commit | \
+    fzf --ansi --height=10 --reverse --header="Select a branch to switch to:" \
+        --bind="enter:accept" \
+        --bind="j:down,k:up" \
+        --color=hl:green --color=fg+:green --color=bg+:black)
+
+  if [ -n "$selected_branch" ]; then
+    local branch_name=$(echo "$selected_branch" | awk '{print $NF}')
+    git switch "$branch_name"
+  else
+    echo "No branch selected."
+  fi
+}
+
+switch_all_branches_by_index() {
+  local current_branch=$(git branch --show-current)
+
+  local selected_branch=$(git for-each-ref --sort=-committerdate --format='%(refname:short) ~ %(committerdate:relative)' refs/heads/ refs/remotes/ \
+    | awk -F' ~ ' '{print $1 " ~ " $2}' \
+    | grep -vE '^origin[^/]' \
+    | awk -F~ '!seen[$1]++' \
+    | head -n 20 \
+    | awk -F' ~ ' '{
+        split($2, time_parts, " ");
+        relative_time = time_parts[1];
+        unit = substr(time_parts[2], 1, 1);
+        prefix = ($1 == "'$current_branch'") ? "*" : " ";
+        printf("%s%-2s %-5s %-s\n", prefix, NR, "-"relative_time unit, $1);
+      }' \
+    | fzf --ansi --height=20 --reverse --header="Select a branch to switch to (local & remote):" \
+          --bind="enter:accept" \
+          --bind="j:down,k:up" \
+          --color=hl:green --color=fg+:green --color=bg+:black)
+
+  if [ -n "$selected_branch" ]; then
+    local branch_name=$(echo "$selected_branch" | awk '{print $NF}' | sed 's/origin\///g')
+    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+      git switch "$branch_name"
+    elif git show-ref --verify --quiet "refs/remotes/origin/$branch_name"; then
+      git switch --track "origin/$branch_name"
+    else
+      echo "Branch not found: $branch_name"
+    fi
+  else
+    echo "No branch selected."
+  fi
+}
