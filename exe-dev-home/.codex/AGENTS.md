@@ -1,0 +1,1 @@
+/home/exedev/.config/shelley/AGENTS.md

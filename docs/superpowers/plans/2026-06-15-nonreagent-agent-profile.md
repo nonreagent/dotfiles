@@ -201,6 +201,7 @@ These tests are written before `build.sh`/`install.sh` exist, so the suite fails
 # Fail (exit 1) if <dir> contains anything sensitive or the human's identity.
 set -euo pipefail
 DIR="${1:?usage: check-no-secrets.sh <dir>}"
+[ -d "$DIR" ] || { echo "error: tree not found: $DIR" >&2; exit 1; }
 
 fail=0
 
