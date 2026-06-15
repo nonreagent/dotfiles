@@ -24,8 +24,8 @@ an agent-identity overlay.
 
 ## Install (on an exe.dev VM)
 
-    git clone https://github.com/nonreagent/dotfiles ~/nonreagent-dotfiles
-    cd ~/nonreagent-dotfiles
+    git clone https://github.com/nonreagent/dotfiles ~/.dotfiles
+    cd ~/.dotfiles
     ./install.sh
     gh auth login                 # as @nonreagent
     ~/.claude/sync-plugins.sh     # install enabled Claude plugins
