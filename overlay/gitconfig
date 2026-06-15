@@ -1,0 +1,26 @@
+# @nonreagent identity + auth overlay.
+# .gitconfig.shared (vendored, identity-stripped) is included FIRST so the keys
+# below win. gh provides the credential helper after `gh auth login` on the VM.
+[include]
+	path = ~/.gitconfig.shared
+
+[user]
+	name = Agent Norton
+	email = agent@nonration.al
+
+[github]
+	user = nonreagent
+
+[init]
+	defaultBranch = main
+
+[commit]
+	gpgsign = false
+
+[credential "https://github.com"]
+	helper =
+	helper = !gh auth git-credential
+
+[credential "https://gist.github.com"]
+	helper =
+	helper = !gh auth git-credential
