@@ -60,7 +60,7 @@ Plain text, one path per line (relative to `~/.dotfiles`), `#` comments. Defines
 
 ### `build.sh` (runs on the mac)
 
-1. Read `manifest`; copy each path from `~/.dotfiles` into `home/` (mirroring relative paths).
+1. Read `manifest`; for each path copy only the **git-tracked** files from `~/.dotfiles` into `home/` (mirroring relative paths). This honors the dotfiles allowlist — the live `~/.dotfiles/.claude` is symlinked to `~/.claude` and carries untracked runtime state (≈10k installed-plugin files, caches) that must not ship. Tracked skills are symlinks into the `mattpocock-skills` submodule, so dereference them (`cp -RL`) into real content so the agent stays self-contained.
 2. Apply the overlay:
    - **gitconfig split.** Copy `~/.dotfiles/.gitconfig` to `home/.gitconfig.shared`, then `--unset` its `user.name`, `user.email`, `github.user`, and `commit.gpgsign` (via `git config -f`) so the shared file carries only aliases/colors/behavior and the overlay is the **sole** identity source. Write `home/.gitconfig` from `overlay/gitconfig`: `[include] path = ~/.gitconfig.shared` **first**, then the overrides last so they win — `[user] name = Agent Norton`, `email = agent@nonration.al`; `[github] user = nonreagent`; `[commit] gpgsign = false`; `[init] defaultBranch = main`; and `[credential "https://github.com"]` that resets the helper list (`helper =`) then sets `helper = !gh auth git-credential`. Git applies includes/keys in order, last value wins, so aliases/colors/behavior from the shared file carry over while identity + auth flip to the agent.
    - **CLAUDE.md.** Write `home/.claude/CLAUDE.md` from `overlay/claude-CLAUDE.md` — imports `language/workflow/markdown/improvement` and `exe.md`, but **not** `macos_interactions`. `macos_interactions.md` is not vendored.
@@ -117,7 +117,7 @@ Shell (`.bashrc`, `.bashrc.Linux` + snippet, `.bash_profile`, `.bash_completion`
 - **Harmless gitconfig residue:** after identity is stripped, `.gitconfig.shared` still carries the inert `signingkey`/`op-ssh-sign` program and macOS `gh` credential helper. They never fire because the overlay sets `gpgsign=false` and resets the credential helper list. The `~/.local/.gitconfig` and `~/wrk` includes silently no-op when absent.
 - **`pbcopy`-based git aliases** (`bcp`, etc.) fail harmlessly on Linux; not worth stripping.
 - **`BASH_REPORT_MISSING` noise:** the login-time PATH checks live in `.bash_profile` and run before `.bashrc.Linux`, so the build patches the vendored `home/.bash_profile` to set `BASH_REPORT_MISSING=false` directly.
-- **`.claude/ext/mattpocock-skills` submodule:** if any vendored skill references it, the build copies the resolved working-tree contents (no submodule on the VM). Out of scope for v1 unless a vendored skill needs it.
+- **`.claude/ext/mattpocock-skills` submodule:** the curated skills are symlinks into this submodule. The build dereferences them (`cp -RL`) so `home/.claude/skills/<name>/` holds real content — the agent needs neither the submodule nor the symlinks on the VM.
 - **Plugins:** referenced by `settings.json` but their code is not in this repo; installed on the VM via `sync-plugins.sh`.
 - **Installer safety:** backs up non-symlink base files to `.bak`; idempotent re-runs replace its own symlinks only.
 

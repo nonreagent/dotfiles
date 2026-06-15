@@ -333,14 +333,27 @@ OVERLAY="$REPO/overlay"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-# 1. Generic verbatim copies from the manifest.
+# 1. Vendor the manifest paths — only GIT-TRACKED files, so we honor the dotfiles
+#    allowlist. The live ~/.dotfiles/.claude is symlinked to ~/.claude and holds
+#    untracked runtime state (e.g. ~10k installed-plugin files) that must NOT ship.
+#    Tracked skills are symlinks into the mattpocock submodule, so dereference them
+#    (cp -RL) into real content and the agent stays self-contained.
 while IFS= read -r line; do
   line="${line%%#*}"; line="$(echo "$line" | xargs)"   # strip comment + trim
   [ -z "$line" ] && continue
-  src="$DOTFILES/$line"; dst="$OUT/$line"
-  [ -e "$src" ] || { echo "error: manifest path missing in dotfiles: $line" >&2; exit 1; }
-  mkdir -p "$(dirname "$dst")"
-  cp -R "$src" "$dst"
+  n=0
+  while IFS= read -r -d '' entry; do
+    mode="${entry%% *}"; file="${entry#*$'\t'}"        # `ls-files -s` => "<mode> <sha> <stage>\t<path>"
+    src="$DOTFILES/$file"; dst="$OUT/$file"
+    mkdir -p "$(dirname "$dst")"
+    case "$mode" in
+      120000) cp -RL "$src" "$dst" ;;   # symlink -> copy the resolved target content
+      160000) : ;;                      # gitlink/submodule entry -> skip
+      *)      cp "$src" "$dst" ;;        # regular file
+    esac
+    n=$((n + 1))
+  done < <(git -C "$DOTFILES" ls-files -s -z -- "$line")
+  [ "$n" -gt 0 ] || { echo "error: no tracked files for manifest path: $line" >&2; exit 1; }
 done < "$REPO/manifest"
 
 # 2. git identity split: vendor shared, strip the human's identity, overlay owns it.
@@ -387,13 +400,16 @@ Expected: prints `built …/home` with no `SECRET LEAK` lines and exit 0.
 
 Run:
 ```bash
-grep -c 'git@nonration.al' home/.gitconfig.shared        # expect 0
-grep -E 'agent@nonration.al|Agent Norton' home/.gitconfig # expect both
-grep -c 'macos_interactions' home/.claude/CLAUDE.md       # expect 0
-grep -c 'XDG_RUNTIME_DIR' home/.bashrc.Linux              # expect 1
-grep -c 'BASH_REPORT_MISSING=false' home/.bash_profile    # expect 1
+grep -c 'git@nonration.al' home/.gitconfig.shared          # expect 0
+grep -E 'agent@nonration.al|Agent Norton' home/.gitconfig  # expect both
+grep -c 'macos_interactions' home/.claude/CLAUDE.md        # expect 0
+grep -c 'XDG_RUNTIME_DIR' home/.bashrc.Linux               # expect 1
+grep -c 'BASH_REPORT_MISSING=false' home/.bash_profile     # expect 1
+find home/.claude/plugins -type f | wc -l                  # expect 2 (.keep skeleton, NOT 10k plugin files)
+test -f home/.claude/skills/tdd/SKILL.md && echo deref-ok  # expect deref-ok (symlinked skill became real content)
+find home/.claude/skills -type l | wc -l                   # expect 0 (no dangling symlinks vendored)
 ```
-Expected: `0`, both strings printed, `0`, `1`, `1`.
+Expected: `0`, both strings printed, `0`, `1`, `1`, `2`, `deref-ok`, `0`.
 
 - [ ] **Step 4: Run the suite — build checks now green**
 
