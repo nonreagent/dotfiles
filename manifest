@@ -1,0 +1,37 @@
+# Paths vendored verbatim from $DOTFILES into home/ (same relative path).
+# One per line; '#' starts a comment. Special-cased paths (.gitconfig, bin.Linux,
+# .claude/CLAUDE.md) are handled in build.sh and intentionally omitted here.
+
+# shell
+.bashrc
+.bashrc.Linux
+.bash_profile
+.bash_completion
+.bash_completion.d
+.inputrc
+
+# git (identity-bearing .gitconfig is special-cased; these are safe verbatim)
+.githelpers
+.gitignore_global
+
+# tmux / editor / repl
+.tmux.conf
+.vimrc
+.vim
+.irbrc
+.railsrc
+.screenrc
+
+# claude (curated subset; CLAUDE.md comes from the overlay, macos_interactions.md excluded)
+.claude/language.md
+.claude/workflow.md
+.claude/markdown.md
+.claude/improvement.md
+.claude/settings.json
+.claude/sync-plugins.sh
+.claude/skills
+.claude/agents
+.claude/commands
+.claude/hooks
+.claude/output-styles
+.claude/plugins

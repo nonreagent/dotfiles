@@ -1,0 +1,8 @@
+# editor/OS cruft
+.DS_Store
+
+# installer backups created on the VM
+*.bak
+
+# legacy hand-built artifact, replaced by build.sh + home/
+home.tgz
