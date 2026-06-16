@@ -51,3 +51,4 @@ source_if_exists() {
 source_if_exists "$HOME/.bashrc.${platform}"
 source_if_exists "$HOME/.bashrc.${host}"
 source_if_exists "$HOME/.local/.bashrc"
+source_if_exists "$HOME/.cargo/env"
