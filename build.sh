@@ -62,10 +62,11 @@ cp "$OVERLAY/gitconfig" "$OUT/.gitconfig"
 # 3. bin.Linux -> bin
 cp -R "$DOTFILES/bin.Linux" "$OUT/bin"
 
-# 4. claude entrypoint + exe context from the overlay (macos import dropped).
+# 4. claude entrypoint + exe context + agent identity from the overlay (macos import dropped).
 mkdir -p "$OUT/.claude"
 cp "$OVERLAY/claude-CLAUDE.md" "$OUT/.claude/CLAUDE.md"
 cp "$OVERLAY/exe.md"           "$OUT/.claude/exe.md"
+cp "$OVERLAY/identity.md"      "$OUT/.claude/identity.md"
 
 # 5. Restore XDG_RUNTIME_DIR (base .profile goes unread once .bash_profile exists).
 cat >> "$OUT/.bashrc.Linux" <<'SNIPPET'

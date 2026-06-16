@@ -4,4 +4,5 @@
 @workflow.md
 @markdown.md
 @improvement.md
+@identity.md
 @exe.md
