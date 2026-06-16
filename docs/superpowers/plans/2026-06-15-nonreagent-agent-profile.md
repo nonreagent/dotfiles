@@ -449,11 +449,32 @@ DEST="${HOME}"
 
 [ -d "$SRC" ] || { echo "error: no home/ tree; run build.sh on the mac first" >&2; exit 1; }
 
+# Ensure every ancestor of a target is a real directory. If a path component
+# exists as a NON-directory (a stray file or symlink the base image shipped),
+# move it aside to .bak rather than letting `mkdir -p` abort the whole install.
+ensure_parent() {
+  local dir="$1"
+  [ "$dir" = "$DEST" ] && return 0
+  local rel="${dir#"$DEST"/}" cur="$DEST" part bak i
+  local IFS='/'
+  for part in $rel; do
+    [ -n "$part" ] || continue
+    cur="$cur/$part"
+    if [ -e "$cur" ] && [ ! -d "$cur" ]; then
+      bak="$cur.bak"; i=1
+      while [ -e "$bak" ]; do bak="$cur.bak.$i"; i=$((i + 1)); done
+      mv "$cur" "$bak"
+      echo "  [backup] ${cur#"$DEST"/} -> ${bak#"$DEST"/} (was a non-directory)" >&2
+    fi
+    [ -d "$cur" ] || mkdir "$cur"
+  done
+}
+
 linked=0
 while IFS= read -r -d '' file; do
   rel="${file#"$SRC"/}"
   d="$DEST/$rel"
-  mkdir -p "$(dirname "$d")"
+  ensure_parent "$(dirname "$d")"
   if [ -L "$d" ]; then
     rm -f "$d"
   elif [ -e "$d" ]; then
