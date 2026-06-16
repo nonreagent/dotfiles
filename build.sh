@@ -1,14 +1,28 @@
 #!/usr/bin/env bash
-# Build the @nonreagent agent home from a subset of $DOTFILES + the overlay.
-# Run on the mac. Idempotent: re-running produces no git diff in home/.
+# Build the @nonreagent agent home from a subset of the upstream dotfiles + the
+# overlay. Runs anywhere (mac or VM). Idempotent: re-running produces no git diff
+# in home/.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOTFILES="${DOTFILES:-$HOME/.dotfiles}"
+SOURCE_REPO="${SOURCE_REPO:-https://github.com/nonrational/dotfiles}"
 OUT="$REPO/home"
 OVERLAY="$REPO/overlay"
 
-[ -d "$DOTFILES" ] || { echo "error: DOTFILES not found at $DOTFILES" >&2; exit 1; }
+# Source the upstream dotfiles. Default: clone fresh from GitHub so the build is
+# self-contained and reproducible on any host. Skills are symlinks into a
+# submodule, so --recurse-submodules is required for the cp -RL deref below.
+# Override with a local checkout (DOTFILES=~/.dotfiles ./build.sh) to build
+# uncommitted edits during the mac edit->build loop.
+if [ -n "${DOTFILES:-}" ]; then
+  [ -d "$DOTFILES" ] || { echo "error: DOTFILES not found at $DOTFILES" >&2; exit 1; }
+else
+  DOTFILES="$(mktemp -d)"
+  trap 'rm -rf "$DOTFILES"' EXIT
+  echo "cloning $SOURCE_REPO -> $DOTFILES"
+  git clone --depth 1 --recurse-submodules --shallow-submodules --quiet \
+    "$SOURCE_REPO" "$DOTFILES"
+fi
 
 # Rebuild from scratch so upstream deletions propagate and appends never double up.
 rm -rf "$OUT"

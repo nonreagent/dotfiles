@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Verification suite. Run on the mac (build.sh needs $DOTFILES present).
+# Verification suite. Runs anywhere: build.sh clones the upstream dotfiles by
+# default, or honors DOTFILES=/path for a local checkout.
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DOTFILES="${DOTFILES:-$HOME/.dotfiles}"
 pass=0; failc=0
 check() { if "$@"; then echo "PASS: $1"; pass=$((pass+1)); else echo "FAIL: $1"; failc=$((failc+1)); fi; }
 
 tree_hash() { ( cd "$1" && find . -type f -exec shasum {} \; | sort ); }
 
 test_idempotent() {
-  DOTFILES="$DOTFILES" "$REPO/build.sh" >/dev/null || return 1
+  "$REPO/build.sh" >/dev/null || return 1   # inherits DOTFILES from env if set, else clones
   local a b
   a="$(tree_hash "$REPO/home")"
-  DOTFILES="$DOTFILES" "$REPO/build.sh" >/dev/null || return 1
+  "$REPO/build.sh" >/dev/null || return 1
   b="$(tree_hash "$REPO/home")"
   [ "$a" = "$b" ]
 }
