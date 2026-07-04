@@ -68,11 +68,14 @@ cp "$OVERLAY/claude-CLAUDE.md" "$OUT/.claude/CLAUDE.md"
 cp "$OVERLAY/exe.md"           "$OUT/.claude/exe.md"
 cp "$OVERLAY/identity.md"      "$OUT/.claude/identity.md"
 
-# 5. Restore XDG_RUNTIME_DIR (base .profile goes unread once .bash_profile exists).
+# 5. Overlay shell env for the VM: XDG_RUNTIME_DIR (base .profile goes unread once
+#    .bash_profile exists) and Rust (rustup installs ~/.cargo/env; upstream now
+#    enables rust-analyzer-lsp). Guarded so the line is a no-op where cargo is absent.
 cat >> "$OUT/.bashrc.Linux" <<'SNIPPET'
 
 # --- nonreagent overlay (exe.dev) ---
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 SNIPPET
 
 # 6. Silence "not added to PATH" noise: the checks run in .bash_profile at login,

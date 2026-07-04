@@ -22,11 +22,13 @@
 .railsrc
 .screenrc
 
-# claude (curated subset; CLAUDE.md comes from the overlay, macos_interactions.md excluded)
-.claude/language.md
-.claude/workflow.md
-.claude/markdown.md
-.claude/improvement.md
+# claude (curated subset; CLAUDE.md comes from the overlay. Upstream moved the
+# rule files under .claude/rules/; macos_interactions.md and code-review-register.md
+# are intentionally excluded.)
+.claude/rules/language.md
+.claude/rules/workflow.md
+.claude/rules/markdown.md
+.claude/rules/improvement.md
 .claude/settings.json
 .claude/sync-plugins.sh
 .claude/skills

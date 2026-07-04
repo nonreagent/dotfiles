@@ -73,3 +73,4 @@ source_if_exists "/usr/share/autojump/autojump.sh"
 
 # --- nonreagent overlay (exe.dev) ---
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
