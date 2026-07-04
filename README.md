@@ -42,4 +42,5 @@ checkout (the mac edit→build loop), point it at one:
 - **Source edits:** push to `nonrational/dotfiles`, then `./build.sh` here picks
   them up. To preview uncommitted edits, `DOTFILES=~/.dotfiles ./build.sh`.
 - **VM:** `git pull` (symlinks make it live immediately). Re-run `./install.sh`
-  only when new files were added.
+  when files were added, moved, or removed — it links new files and prunes
+  symlinks left dangling by a move/removal.
