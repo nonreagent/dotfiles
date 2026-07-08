@@ -344,7 +344,6 @@ rw_render_playbook() { # template_file repo pr review_state reviewer
 - [ ] **Step 4: Write the reaction playbook**
 
 ```markdown
-# overlay/review-watcher/playbook.md
 You are Agent Norton (@nonreagent). A review just landed on PR #{{PR}} of {{REPO}},
 authored by @{{REVIEWER}}, with state {{REVIEW_STATE}}. You are already checked out on
 the PR branch in this repo. React autonomously, then exit.
@@ -577,14 +576,14 @@ HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 rw_load_config
 SOCK="$RW_HOME/tmux.sock"
 
-rw_active_reactions() { tmux -S "$SOCK" list-windows -F '#{window_name}' 2>/dev/null | grep -c '^pr-' || true; }
+rw_active_reactions() { tmux -S "$SOCK" list-sessions 2>/dev/null | wc -l || true; }
 
 rw_dispatch() { # owner repo pr review_id state reviewer classification
   local owner="$1" repo="$2" pr="$3" rid="$4" state="$5" reviewer="$6" cls="$7"
   case "$cls" in
     SKIP)   rw_mark_seen "$owner" "$repo" "$pr" "$rid" ;;
     NOTIFY)
-      gh --repo "$owner/$repo" pr comment "$pr" \
+      gh pr comment "$pr" --repo "$owner/$repo" \
          --body "@nonrational — review by @$reviewer ($state) detected; not acting (reviewer not in allowlist)." \
          >/dev/null 2>&1 || true
       rw_mark_seen "$owner" "$repo" "$pr" "$rid" ;;
@@ -592,8 +591,12 @@ rw_dispatch() { # owner repo pr review_id state reviewer classification
       if [ "$(rw_active_reactions)" -ge "$MAX_CONCURRENT" ]; then
         echo "at concurrency cap ($MAX_CONCURRENT); deferring $owner/$repo#$pr" >&2; return
       fi
-      tmux -S "$SOCK" new-window -d -n "pr-$pr" \
-        "review-react $owner $repo $pr $rid $state $reviewer" ;;
+      local sess; sess="$(rw_session_name "$owner" "$repo" "$pr")"
+      if tmux -S "$SOCK" has-session -t "$sess" 2>/dev/null; then
+        echo "reaction already in flight for $sess; skipping" >&2; return
+      fi
+      tmux -S "$SOCK" new-session -d -s "$sess" \
+        "$HERE/review-react $owner $repo $pr $rid $state $reviewer" ;;
   esac
 }
 
@@ -674,6 +677,7 @@ Wants=network-online.target
 Type=simple
 User=exedev
 Environment=RW_HOME=/home/exedev/.review-watcher
+Environment=PATH=/home/exedev/.local/bin:/home/exedev/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/home/exedev/bin/review-watcher --supervise
 Restart=always
 RestartSec=10
