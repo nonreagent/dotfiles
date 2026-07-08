@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 User=exedev
 Environment=RW_HOME=/home/exedev/.review-watcher
+Environment=PATH=/home/exedev/.local/bin:/home/exedev/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/home/exedev/bin/review-watcher --supervise
 Restart=always
 RestartSec=10
