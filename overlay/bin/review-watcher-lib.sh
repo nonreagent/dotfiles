@@ -26,3 +26,22 @@ rw_mark_seen() { # owner repo pr review_id
   mkdir -p "$(dirname "$f")"
   printf '%s' "$4" > "$f"
 }
+
+rw_in_allowlist() { # login "space separated list"
+  local login="$1" x
+  for x in $2; do [ "$x" = "$login" ] && return 0; done
+  return 1
+}
+
+rw_classify() { # reviewer state is_draft pr_author
+  local reviewer="$1" state="$2" is_draft="$3"
+  [ "$is_draft" = "true" ] && { echo SKIP; return; }
+  [ "$reviewer" = "$RW_BOT_LOGIN" ] && { echo SKIP; return; }
+  rw_in_allowlist "$reviewer" "$REVIEWER_ALLOWLIST" || { echo NOTIFY; return; }
+  case "$state" in
+    APPROVED)          echo REACT_APPROVED ;;
+    CHANGES_REQUESTED) echo REACT_CHANGES ;;
+    COMMENTED)         echo REACT_COMMENTED ;;
+    *)                 echo SKIP ;;
+  esac
+}

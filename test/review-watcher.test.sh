@@ -41,10 +41,34 @@ test_new_review_id_is_unseen() {
   return 0
 }
 
+test_classify_untrusted_is_notify() {
+  REVIEWER_ALLOWLIST="nonrational"
+  [ "$(rw_classify someone_else APPROVED false alice)" = "NOTIFY" ]
+}
+test_classify_draft_is_skip() {
+  REVIEWER_ALLOWLIST="nonrational"
+  [ "$(rw_classify nonrational APPROVED true nonreagent)" = "SKIP" ]
+}
+test_classify_self_review_is_skip() {
+  REVIEWER_ALLOWLIST="nonreagent nonrational"
+  [ "$(rw_classify nonreagent APPROVED false nonreagent)" = "SKIP" ]
+}
+test_classify_trusted_states() {
+  REVIEWER_ALLOWLIST="nonrational"
+  [ "$(rw_classify nonrational APPROVED false nonreagent)" = "REACT_APPROVED" ] \
+  && [ "$(rw_classify nonrational CHANGES_REQUESTED false nonreagent)" = "REACT_CHANGES" ] \
+  && [ "$(rw_classify nonrational COMMENTED false nonreagent)" = "REACT_COMMENTED" ] \
+  && [ "$(rw_classify nonrational DISMISSED false nonreagent)" = "SKIP" ]
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
 check test_unseen_then_seen
 check test_new_review_id_is_unseen
+check test_classify_untrusted_is_notify
+check test_classify_draft_is_skip
+check test_classify_self_review_is_skip
+check test_classify_trusted_states
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]
