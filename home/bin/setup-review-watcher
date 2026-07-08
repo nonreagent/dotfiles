@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+RW_HOME="$HOME/.review-watcher"
+# Templates ship beside the built scripts under ~/bin? No — they live in the repo's
+# overlay, resolved via the script's real location's repo root.
+SRC="$(cd "$HERE/../.." && pwd)/overlay/review-watcher"   # when run from a repo checkout
+[ -d "$SRC" ] || SRC="$HERE/../review-watcher"            # fallback
+
+mkdir -p "$RW_HOME"/{state,locks,logs,repos}
+[ -f "$RW_HOME/config" ]   || cp "$SRC/config.example" "$RW_HOME/config"
+cp "$SRC/playbook.md" "$RW_HOME/playbook.md"              # playbook always refreshed from source
+
+sudo cp "$SRC/review-watcher.service" /etc/systemd/system/review-watcher.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now review-watcher.service
+echo "review-watcher installed. Logs: journalctl -u review-watcher -f"
+echo "Attach reactions: tmux -S $RW_HOME/tmux.sock attach"
+echo "Pause: touch $RW_HOME/PAUSED   (or: sudo systemctl stop review-watcher)"
