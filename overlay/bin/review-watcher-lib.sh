@@ -54,3 +54,18 @@ rw_render_playbook() { # template_file repo pr review_state reviewer
   sed -e "s|{{REPO}}|$2|g" -e "s|{{PR}}|$3|g" \
       -e "s|{{REVIEW_STATE}}|$4|g" -e "s|{{REVIEWER}}|$5|g" "$1"
 }
+
+rw_open_prs() {
+  gh search prs --author "$RW_BOT_LOGIN" --state open \
+     --json repository,number,isDraft,author --limit 100 \
+   | jq -r '.[] | [(.repository.nameWithOwner|split("/")[0]),
+                    (.repository.nameWithOwner|split("/")[1]),
+                    (.number|tostring), (.isDraft|tostring), .author.login]
+                   | @tsv'
+}
+
+rw_latest_review() { # owner repo pr — newest non-PENDING review, or empty
+  gh api "repos/$1/$2/pulls/$3/reviews" --paginate \
+   | jq -rs 'add | map(select(.state != "PENDING")) | sort_by(.submitted_at) | last
+             | if . == null then empty else [(.id|tostring), .state, .user.login] | @tsv end'
+}

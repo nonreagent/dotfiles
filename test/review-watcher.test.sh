@@ -72,6 +72,37 @@ test_render_substitutes_placeholders() {
   [ "$out" = "repo=lizzie pr=131 state=CHANGES_REQUESTED who=nonrational" ]
 }
 
+test_open_prs_parses_search() {
+  local bin; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+# stub: emit one fake search hit as gh would with --json
+cat <<'JSON'
+[{"repository":{"nameWithOwner":"nonrational/lizzie"},"number":131,"isDraft":false,"author":{"login":"nonreagent"}}]
+JSON
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(PATH="$bin:$PATH" rw_open_prs)"
+  rm -rf "$bin"
+  [ "$out" = "$(printf 'nonrational\tlizzie\t131\tfalse\tnonreagent')" ]
+}
+
+test_latest_review_picks_newest_nonpending() {
+  local bin; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+[{"id":1,"state":"COMMENTED","user":{"login":"nonrational"},"submitted_at":"2026-07-01T00:00:00Z"},
+ {"id":2,"state":"APPROVED","user":{"login":"nonrational"},"submitted_at":"2026-07-02T00:00:00Z"},
+ {"id":3,"state":"PENDING","user":{"login":"nonrational"},"submitted_at":null}]
+JSON
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(PATH="$bin:$PATH" rw_latest_review nonrational lizzie 131)"
+  rm -rf "$bin"
+  [ "$out" = "$(printf '2\tAPPROVED\tnonrational')" ]
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
@@ -83,5 +114,7 @@ check test_classify_self_review_is_skip
 check test_classify_trusted_states
 check test_session_name_is_repo_qualified
 check test_render_substitutes_placeholders
+check test_open_prs_parses_search
+check test_latest_review_picks_newest_nonpending
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]
