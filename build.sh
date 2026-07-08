@@ -78,6 +78,16 @@ export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 SNIPPET
 
+# 5b. tmux: agents don't want mouse reporting — it injects mouse escape sequences
+#     into the pane and fights programmatic copy/paste. Upstream sets `mouse on`;
+#     append an override to the vendored config (same overlay pattern as the
+#     .bashrc.Linux block above), which lands last so `off` wins.
+cat >> "$OUT/.tmux.conf" <<'SNIPPET'
+
+# --- nonreagent overlay (exe.dev): disable mouse reporting for agent terminals
+set -g mouse off
+SNIPPET
+
 # 6. Silence "not added to PATH" noise: the checks run in .bash_profile at login,
 #    before .bashrc.Linux, so patch the vendored copy directly.
 perl -pi -e 's/^BASH_REPORT_MISSING=true\b/BASH_REPORT_MISSING=false/' "$OUT/.bash_profile"
