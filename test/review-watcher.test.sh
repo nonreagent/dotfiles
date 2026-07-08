@@ -29,8 +29,22 @@ test_seen_file_path() {
   [ "$(rw_seen_file nonrational lizzie 42)" = "$RW_HOME/state/nonrational__lizzie__42.seen" ]
 }
 
+test_unseen_then_seen() {
+  rw_is_seen nonrational lizzie 42 REVIEW_A && return 1   # nothing recorded yet
+  rw_mark_seen nonrational lizzie 42 REVIEW_A
+  rw_is_seen nonrational lizzie 42 REVIEW_A               # now seen
+}
+
+test_new_review_id_is_unseen() {
+  rw_mark_seen nonrational lizzie 42 REVIEW_A
+  rw_is_seen nonrational lizzie 42 REVIEW_B && return 1   # a newer review id is unseen
+  return 0
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
+check test_unseen_then_seen
+check test_new_review_id_is_unseen
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]

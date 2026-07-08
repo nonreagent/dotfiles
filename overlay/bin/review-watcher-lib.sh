@@ -15,3 +15,14 @@ rw_load_config() {
 rw_seen_file() { # owner repo pr
   printf '%s/state/%s__%s__%s.seen' "$RW_HOME" "$1" "$2" "$3"
 }
+
+rw_is_seen() { # owner repo pr review_id
+  local f; f="$(rw_seen_file "$1" "$2" "$3")"
+  [ -f "$f" ] && [ "$(cat "$f")" = "$4" ]
+}
+
+rw_mark_seen() { # owner repo pr review_id
+  local f; f="$(rw_seen_file "$1" "$2" "$3")"
+  mkdir -p "$(dirname "$f")"
+  printf '%s' "$4" > "$f"
+}
