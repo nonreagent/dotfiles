@@ -741,7 +741,7 @@ git commit -m "Review watcher: installer + systemd unit"
 Insert:
 ```bash
 # 3b. nonreagent overlay bin scripts (agent-only tools; e.g. the review watcher).
-cp overlay/bin/* "$OUT/bin/"
+cp "$OVERLAY"/bin/* "$OUT/bin/"
 ```
 
 - [ ] **Step 2: Mirror the scripts into `home/bin` so the committed tree is installable now**
