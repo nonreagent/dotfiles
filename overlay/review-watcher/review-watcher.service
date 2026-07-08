@@ -1,0 +1,15 @@
+[Unit]
+Description=Agent PR-review watcher (@nonreagent)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=exedev
+Environment=RW_HOME=/home/exedev/.review-watcher
+ExecStart=/home/exedev/bin/review-watcher --supervise
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
