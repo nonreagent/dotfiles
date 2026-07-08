@@ -61,6 +61,17 @@ test_classify_trusted_states() {
   && [ "$(rw_classify nonrational DISMISSED false nonreagent)" = "SKIP" ]
 }
 
+test_session_name_is_repo_qualified() {
+  [ "$(rw_session_name nonrational lizzie 131)" = "lizzie-pr-131" ]
+}
+test_render_substitutes_placeholders() {
+  local tpl; tpl="$(mktemp)"
+  printf 'repo={{REPO}} pr={{PR}} state={{REVIEW_STATE}} who={{REVIEWER}}\n' > "$tpl"
+  local out; out="$(rw_render_playbook "$tpl" lizzie 131 CHANGES_REQUESTED nonrational)"
+  rm -f "$tpl"
+  [ "$out" = "repo=lizzie pr=131 state=CHANGES_REQUESTED who=nonrational" ]
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
@@ -70,5 +81,7 @@ check test_classify_untrusted_is_notify
 check test_classify_draft_is_skip
 check test_classify_self_review_is_skip
 check test_classify_trusted_states
+check test_session_name_is_repo_qualified
+check test_render_substitutes_placeholders
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]

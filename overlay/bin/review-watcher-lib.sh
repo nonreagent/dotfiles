@@ -45,3 +45,12 @@ rw_classify() { # reviewer state is_draft pr_author
     *)                 echo SKIP ;;
   esac
 }
+
+rw_session_name() { # owner repo pr
+  printf '%s-pr-%s' "$2" "$3"
+}
+
+rw_render_playbook() { # template_file repo pr review_state reviewer
+  sed -e "s|{{REPO}}|$2|g" -e "s|{{PR}}|$3|g" \
+      -e "s|{{REVIEW_STATE}}|$4|g" -e "s|{{REVIEWER}}|$5|g" "$1"
+}
