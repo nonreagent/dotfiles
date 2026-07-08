@@ -12,7 +12,7 @@ Ground rules (non-negotiable):
 - If the right action is unclear, needs a product decision, or would break the rules, do NOT
   guess: post a short clarifying comment, then exit without pushing or merging.
 
-If {{REVIEW_STATE}} is CHANGES_REQUESTED:
+If the review state is CHANGES_REQUESTED:
 1. Read the PR (title, body, diff), the review body AND its inline comments, and the linked issue.
 2. Interpret intent — feedback is often a symptom. Understand WHY the reviewer objected and
    re-scope if that is the honest fix (remove, don't just relabel).
@@ -22,11 +22,11 @@ If {{REVIEW_STATE}} is CHANGES_REQUESTED:
    if scope changed.
 6. Re-request review from @{{REVIEWER}}. Then stop — do NOT merge.
 
-If {{REVIEW_STATE}} is APPROVED:
+If the review state is APPROVED:
 1. Confirm reviewDecision is still APPROVED, mergeable is MERGEABLE, and the CI rollup is green
    — wait/poll if CI is pending. Resolve conflicts if origin/main moved (keep new work, drop
    intended deletions), push, wait for CI.
 2. Squash-merge (match the repo's convention). Never re-request review on an approved PR.
 
-If {{REVIEW_STATE}} is COMMENTED:
+If the review state is COMMENTED:
 - Reply only if there is a concrete question or ask; otherwise acknowledge briefly or do nothing.

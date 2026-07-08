@@ -358,7 +358,7 @@ Ground rules (non-negotiable):
 - If the right action is unclear, needs a product decision, or would break the rules, do NOT
   guess: post a short clarifying comment, then exit without pushing or merging.
 
-If {{REVIEW_STATE}} is CHANGES_REQUESTED:
+If the review state is CHANGES_REQUESTED:
 1. Read the PR (title, body, diff), the review body AND its inline comments, and the linked issue.
 2. Interpret intent — feedback is often a symptom. Understand WHY the reviewer objected and
    re-scope if that is the honest fix (remove, don't just relabel).
@@ -368,13 +368,13 @@ If {{REVIEW_STATE}} is CHANGES_REQUESTED:
    if scope changed.
 6. Re-request review from @{{REVIEWER}}. Then stop — do NOT merge.
 
-If {{REVIEW_STATE}} is APPROVED:
+If the review state is APPROVED:
 1. Confirm reviewDecision is still APPROVED, mergeable is MERGEABLE, and the CI rollup is green
    — wait/poll if CI is pending. Resolve conflicts if origin/main moved (keep new work, drop
    intended deletions), push, wait for CI.
 2. Squash-merge (match the repo's convention). Never re-request review on an approved PR.
 
-If {{REVIEW_STATE}} is COMMENTED:
+If the review state is COMMENTED:
 - Reply only if there is a concrete question or ask; otherwise acknowledge briefly or do nothing.
 ```
 
@@ -502,6 +502,17 @@ mkdir -p "$RW_HOME/locks" "$RW_HOME/logs" "$RW_HOME/repos/$owner"
 exec 9>"$lock"
 flock -n 9 || { echo "review-react: $owner/$repo#$pr already in flight, skipping" >&2; exit 0; }
 
+prompt="$(rw_render_playbook "$RW_HOME/playbook.md" "$repo" "$pr" "$state" "$reviewer")"
+session="$(rw_session_name "$owner" "$repo" "$pr")"
+log="$RW_HOME/logs/${repo}-pr-${pr}.log"
+
+cmd=(timeout "$REACTION_TIMEOUT" claude --remote-control "$session"
+     --permission-mode bypassPermissions "$prompt")
+
+if [ "${RW_DRY_RUN:-0}" = "1" ]; then
+  printf '%q ' "${cmd[@]}"; echo; exit 0
+fi
+
 clone="$RW_HOME/repos/$owner/$repo"
 if [ -d "$clone/.git" ]; then
   git -C "$clone" fetch --quiet origin
@@ -514,17 +525,6 @@ gh pr checkout "$pr" >/dev/null 2>&1 || {
   git checkout --quiet FETCH_HEAD
 }
 
-prompt="$(rw_render_playbook "$RW_HOME/playbook.md" "$repo" "$pr" "$state" "$reviewer")"
-session="$(rw_session_name "$owner" "$repo" "$pr")"
-log="$RW_HOME/logs/${repo}-pr-${pr}.log"
-
-cmd=(timeout "$REACTION_TIMEOUT" claude --remote-control "$session"
-     --permission-mode bypassPermissions "$prompt")
-
-if [ "${RW_DRY_RUN:-0}" = "1" ]; then
-  printf '%q ' "${cmd[@]}"; echo; exit 0
-fi
-
 if "${cmd[@]}" 2>&1 | tee -a "$log"; then
   rw_mark_seen "$owner" "$repo" "$pr" "$review_id"
 else
@@ -534,17 +534,18 @@ fi
 
 - [ ] **Step 2: Verify the command assembly (dry run, no clone)**
 
+The `RW_DRY_RUN` check runs before any clone/checkout, so this needs no origin remote and no
+pre-created git repo — the whole point of the seam.
+
 Run:
 ```bash
 chmod +x overlay/bin/review-react
 RW_HOME="$(mktemp -d)"; mkdir -p "$RW_HOME"
 cp overlay/review-watcher/config.example "$RW_HOME/config"
 cp overlay/review-watcher/playbook.md "$RW_HOME/playbook.md"
-# stub the git/gh/clone path by pre-creating the clone dir as a git repo
-mkdir -p "$RW_HOME/repos/nonrational"; git init -q "$RW_HOME/repos/nonrational/lizzie"
 RW_HOME="$RW_HOME" RW_DRY_RUN=1 overlay/bin/review-react nonrational lizzie 131 REVIEW_X CHANGES_REQUESTED nonrational
 ```
-Expected: a single line beginning `timeout 1500 claude --remote-control lizzie-pr-131 --permission-mode bypassPermissions` followed by the quoted prompt. Confirm **no** `-p` flag and the repo-qualified session name.
+Expected: a single line beginning `timeout 1500 claude --remote-control lizzie-pr-131 --permission-mode bypassPermissions` followed by the quoted prompt, exit 0. Confirm **no** `-p` flag and the repo-qualified session name.
 
 - [ ] **Step 3: Commit**
 
