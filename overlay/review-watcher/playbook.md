@@ -22,10 +22,11 @@ If the review state is CHANGES_REQUESTED:
 6. Re-request review from @{{REVIEWER}}. Then stop — do NOT merge.
 
 If the review state is APPROVED:
-1. Confirm reviewDecision is still APPROVED, mergeable is MERGEABLE, and the CI rollup is green
-   — wait/poll if CI is pending. Resolve conflicts if origin/main moved (keep new work, drop
-   intended deletions), push, wait for CI.
-2. Squash-merge (match the repo's convention). Never re-request review on an approved PR.
+1. Resolve conflicts if origin/main moved (keep new work, drop intended deletions), push, wait
+   for CI.
+2. Run `rw-merge <owner> <repo> <pr>` — it verifies APPROVED + MERGEABLE + CI-green in bash and
+   squash-merges (waiting while CI is pending, refusing if red); do NOT run `gh pr merge`
+   yourself. Never re-request review on an approved PR.
 
 If the review state is COMMENTED:
 - Reply only if there is a concrete question or ask; otherwise acknowledge briefly or do nothing.
