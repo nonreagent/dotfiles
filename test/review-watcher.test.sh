@@ -103,6 +103,99 @@ STUB
   [ "$out" = "$(printf '2\tAPPROVED\tnonrational')" ]
 }
 
+test_merge_ready_all_green() {
+  local bin; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"reviewDecision":"APPROVED","mergeable":"MERGEABLE","statusCheckRollup":[
+  {"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"},
+  {"__typename":"StatusContext","state":"SUCCESS"}
+]}
+JSON
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational lizzie 131)"
+  rm -rf "$bin"
+  [ "$out" = "READY" ]
+}
+
+test_merge_ready_review_required_is_not_ready() {
+  local bin; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"reviewDecision":"REVIEW_REQUIRED","mergeable":"MERGEABLE","statusCheckRollup":[]}
+JSON
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational lizzie 131)"
+  rm -rf "$bin"
+  [ "$out" = "NOT_READY" ]
+}
+
+test_merge_ready_conflicting_is_not_ready() {
+  local bin; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"reviewDecision":"APPROVED","mergeable":"CONFLICTING","statusCheckRollup":[]}
+JSON
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational lizzie 131)"
+  rm -rf "$bin"
+  [ "$out" = "NOT_READY" ]
+}
+
+test_merge_ready_red_check_is_not_ready() {
+  local bin; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"reviewDecision":"APPROVED","mergeable":"MERGEABLE","statusCheckRollup":[
+  {"status":"COMPLETED","conclusion":"SUCCESS"},
+  {"status":"COMPLETED","conclusion":"FAILURE"}
+]}
+JSON
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational lizzie 131)"
+  rm -rf "$bin"
+  [ "$out" = "NOT_READY" ]
+}
+
+test_merge_ready_in_progress_is_pending() {
+  local bin; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"reviewDecision":"APPROVED","mergeable":"MERGEABLE","statusCheckRollup":[
+  {"status":"IN_PROGRESS","conclusion":null},
+  {"status":"COMPLETED","conclusion":"SUCCESS"}
+]}
+JSON
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational lizzie 131)"
+  rm -rf "$bin"
+  [ "$out" = "PENDING" ]
+}
+
+test_merge_ready_empty_rollup_is_ready() {
+  local bin; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"reviewDecision":"APPROVED","mergeable":"MERGEABLE","statusCheckRollup":[]}
+JSON
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational lizzie 131)"
+  rm -rf "$bin"
+  [ "$out" = "READY" ]
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
@@ -116,5 +209,11 @@ check test_session_name_is_repo_qualified
 check test_render_substitutes_placeholders
 check test_open_prs_parses_search
 check test_latest_review_picks_newest_nonpending
+check test_merge_ready_all_green
+check test_merge_ready_review_required_is_not_ready
+check test_merge_ready_conflicting_is_not_ready
+check test_merge_ready_red_check_is_not_ready
+check test_merge_ready_in_progress_is_pending
+check test_merge_ready_empty_rollup_is_ready
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]

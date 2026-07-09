@@ -69,3 +69,19 @@ rw_latest_review() { # owner repo pr — newest non-PENDING review, or empty
    | jq -rs 'add | map(select(.state != "PENDING")) | sort_by(.submitted_at) | last
              | if . == null then empty else [(.id|tostring), .state, .user.login] | @tsv end'
 }
+
+rw_merge_ready() { # owner repo pr — READY | PENDING | NOT_READY
+  gh pr view "$3" --repo "$1/$2" --json reviewDecision,mergeable,statusCheckRollup \
+   | jq -r '
+       def is_red: (.conclusion // "") as $c | (.state // "") as $s |
+         ($c == "FAILURE" or $c == "CANCELLED" or $c == "TIMED_OUT"
+            or $c == "ACTION_REQUIRED" or $c == "STARTUP_FAILURE")
+         or ($s == "FAILURE" or $s == "ERROR");
+       def is_pending: (.status // "") as $st | (.state // "") as $s |
+         ($st == "QUEUED" or $st == "IN_PROGRESS") or ($s == "PENDING");
+       if .reviewDecision != "APPROVED" or .mergeable != "MERGEABLE" then "NOT_READY"
+       elif (.statusCheckRollup | any(is_red)) then "NOT_READY"
+       elif (.statusCheckRollup | any(is_pending)) then "PENDING"
+       else "READY"
+       end'
+}
