@@ -62,6 +62,9 @@ cp "$OVERLAY/gitconfig" "$OUT/.gitconfig"
 # 3. bin.Linux -> bin
 cp -R "$DOTFILES/bin.Linux" "$OUT/bin"
 
+# 3b. nonreagent overlay bin scripts (agent-only tools; e.g. the review watcher).
+cp "$OVERLAY"/bin/* "$OUT/bin/"
+
 # 4. claude entrypoint + exe context + agent identity from the overlay (macos import dropped).
 mkdir -p "$OUT/.claude"
 cp "$OVERLAY/claude-CLAUDE.md" "$OUT/.claude/CLAUDE.md"

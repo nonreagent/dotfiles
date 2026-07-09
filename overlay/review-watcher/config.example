@@ -1,0 +1,5 @@
+# Copy to ~/.review-watcher/config and edit. Unset keys keep the built-in defaults.
+POLL_INTERVAL=45              # seconds between polls
+REVIEWER_ALLOWLIST="nonrational"   # space-separated GitHub logins that may trigger action
+MAX_CONCURRENT=2             # max simultaneous reaction windows
+REACTION_TIMEOUT=1500        # seconds before a stuck reaction is killed (25m)

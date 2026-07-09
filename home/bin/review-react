@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+. "$HERE/review-watcher-lib.sh"
+rw_load_config
+
+owner="$1"; repo="$2"; pr="$3"; review_id="$4"; state="$5"; reviewer="$6"
+lock="$RW_HOME/locks/${owner}__${repo}__${pr}.lock"
+mkdir -p "$RW_HOME/locks" "$RW_HOME/logs" "$RW_HOME/repos/$owner"
+exec 9>"$lock"
+flock -n 9 || { echo "review-react: $owner/$repo#$pr already in flight, skipping" >&2; exit 0; }
+
+prompt="$(rw_render_playbook "$RW_HOME/playbook.md" "$repo" "$pr" "$state" "$reviewer")"
+log="$RW_HOME/logs/${repo}-pr-${pr}.log"
+
+# Headless: --remote-control needs an attended TTY and stalls in a detached tmux
+# session, so run non-interactively. --verbose streams turn-by-turn to the log so
+# `tail -f` shows live progress.
+cmd=(timeout "$REACTION_TIMEOUT" claude -p "$prompt"
+     --permission-mode bypassPermissions --verbose)
+
+if [ "${RW_DRY_RUN:-0}" = "1" ]; then
+  printf '%q ' "${cmd[@]}"; echo; exit 0
+fi
+
+clone="$RW_HOME/repos/$owner/$repo"
+if [ -d "$clone/.git" ]; then
+  git -C "$clone" fetch --quiet origin
+else
+  gh repo clone "$owner/$repo" "$clone" -- --quiet
+fi
+cd "$clone"
+gh pr checkout "$pr" >/dev/null 2>&1 || {
+  git fetch --quiet origin "pull/$pr/head"
+  git checkout --quiet FETCH_HEAD
+}
+
+if "${cmd[@]}" 2>&1 | tee -a "$log"; then
+  rw_mark_seen "$owner" "$repo" "$pr" "$review_id"
+else
+  echo "review-react: reaction on $owner/$repo#$pr failed or timed out; leaving unseen for retry" >&2
+fi
