@@ -37,6 +37,16 @@ checkout (the mac edit→build loop), point it at one:
     gh auth login                 # as @nonreagent
     ~/.claude/sync-plugins.sh     # install enabled Claude plugins
 
+### Review watcher (optional)
+
+Autonomously react to PR reviews on @nonreagent's open PRs. One-time setup on the VM:
+
+    ~/bin/setup-review-watcher     # creates ~/.review-watcher, installs + enables the systemd unit
+
+Observe: `journalctl -u review-watcher -f` · attach reactions: `tmux -S ~/.review-watcher/tmux.sock attach`.
+Pause: `touch ~/.review-watcher/PAUSED` or `sudo systemctl stop review-watcher`.
+Design + plan: `docs/superpowers/specs/2026-07-08-review-watcher-design.md`, `docs/superpowers/plans/2026-07-08-review-watcher.md`.
+
 ## Sync
 
 - **Source edits:** push to `nonrational/dotfiles`, then `./build.sh` here picks

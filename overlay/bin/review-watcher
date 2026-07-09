@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -uo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+. "$HERE/review-watcher-lib.sh"
+rw_load_config
+SOCK="$RW_HOME/tmux.sock"
+
+rw_active_reactions() { tmux -S "$SOCK" list-sessions 2>/dev/null | wc -l || true; }
+
+rw_dispatch() { # owner repo pr review_id state reviewer classification
+  local owner="$1" repo="$2" pr="$3" rid="$4" state="$5" reviewer="$6" cls="$7"
+  case "$cls" in
+    SKIP)   rw_mark_seen "$owner" "$repo" "$pr" "$rid" ;;
+    NOTIFY)
+      gh pr comment "$pr" --repo "$owner/$repo" \
+         --body "@nonrational — review by @$reviewer ($state) detected; not acting (reviewer not in allowlist)." \
+         >/dev/null 2>&1 || true
+      rw_mark_seen "$owner" "$repo" "$pr" "$rid" ;;
+    REACT_*)
+      if [ "$(rw_active_reactions)" -ge "$MAX_CONCURRENT" ]; then
+        echo "at concurrency cap ($MAX_CONCURRENT); deferring $owner/$repo#$pr" >&2; return
+      fi
+      local sess; sess="$(rw_session_name "$owner" "$repo" "$pr")"
+      if tmux -S "$SOCK" has-session -t "$sess" 2>/dev/null; then
+        echo "reaction already in flight for $sess; skipping" >&2; return
+      fi
+      tmux -S "$SOCK" new-session -d -s "$sess" \
+        "$HERE/review-react $owner $repo $pr $rid $state $reviewer" ;;
+  esac
+}
+
+rw_poll_once() {
+  [ -f "$RW_HOME/PAUSED" ] && { echo "PAUSED flag set; skipping poll" >&2; return; }
+  local owner repo pr is_draft author rid state reviewer cls
+  while IFS=$'\t' read -r owner repo pr is_draft author; do
+    [ -n "$owner" ] || continue
+    IFS=$'\t' read -r rid state reviewer < <(rw_latest_review "$owner" "$repo" "$pr")
+    [ -n "${rid:-}" ] || continue
+    rw_is_seen "$owner" "$repo" "$pr" "$rid" && continue
+    cls="$(rw_classify "$reviewer" "$state" "$is_draft" "$author")"
+    echo "$(date -u +%H:%M:%S) $owner/$repo#$pr review=$rid $state by=$reviewer -> $cls"
+    rw_dispatch "$owner" "$repo" "$pr" "$rid" "$state" "$reviewer" "$cls"
+  done < <(rw_open_prs)
+}
+
+case "${1:---once}" in
+  --once)      rw_poll_once ;;
+  --supervise) while true; do rw_poll_once; sleep "$POLL_INTERVAL"; done ;;
+  *) echo "usage: review-watcher [--once|--supervise]" >&2; exit 2 ;;
+esac
