@@ -11,11 +11,13 @@ exec 9>"$lock"
 flock -n 9 || { echo "review-react: $owner/$repo#$pr already in flight, skipping" >&2; exit 0; }
 
 prompt="$(rw_render_playbook "$RW_HOME/playbook.md" "$repo" "$pr" "$state" "$reviewer")"
-session="$(rw_session_name "$owner" "$repo" "$pr")"
 log="$RW_HOME/logs/${repo}-pr-${pr}.log"
 
-cmd=(timeout "$REACTION_TIMEOUT" claude --remote-control "$session"
-     --permission-mode bypassPermissions "$prompt")
+# Headless: --remote-control needs an attended TTY and stalls in a detached tmux
+# session, so run non-interactively. --verbose streams turn-by-turn to the log so
+# `tail -f` shows live progress.
+cmd=(timeout "$REACTION_TIMEOUT" claude -p "$prompt"
+     --permission-mode bypassPermissions --verbose)
 
 if [ "${RW_DRY_RUN:-0}" = "1" ]; then
   printf '%q ' "${cmd[@]}"; echo; exit 0
