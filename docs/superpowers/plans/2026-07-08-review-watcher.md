@@ -2,20 +2,22 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A systemd-supervised bash watcher on the exe.dev VM that polls @nonreagent's open PRs and, on a trusted reviewer's review, spawns a remote-control Claude session to react (address change-requests or merge on approval).
+**Goal:** A systemd-supervised bash watcher on the exe.dev VM that polls @nonreagent's open PRs and, on a trusted reviewer's review, spawns a headless Claude session to react (address change-requests or merge on approval).
 
 **Architecture:** Three layers with clean seams. A **library** (`review-watcher-lib.sh`) holds pure, unit-tested functions (classification, dedup state, playbook rendering). A **supervisor** (`review-watcher --supervise`) runs directly under systemd, polls via `gh`, and dispatches. A **reaction wrapper** (`review-react`) clones/checks-out the PR and launches `claude` in a tmux window. Reactions live in tmux windows on a dedicated socket (attachable); the supervisor logs to journald.
 
-> **Refinement vs the spec:** the spec put "the supervisor in tmux window 0." Planning revealed that running the supervisor *directly* under systemd (journald logs, `Restart=always`) and using tmux only for the *reaction* windows is more robust — systemd genuinely supervises the loop instead of a detached tmux server it can't track. Goals unchanged: durable (systemd), reactions attachable (`tmux -S <socket> attach`), observable (journald + tmux + RC).
+> **Refinement vs the spec:** the spec put "the supervisor in tmux window 0." Planning revealed that running the supervisor *directly* under systemd (journald logs, `Restart=always`) and using tmux only for the *reaction* windows is more robust — systemd genuinely supervises the loop instead of a detached tmux server it can't track. Goals unchanged: durable (systemd), reactions attachable (`tmux -S <socket> attach`), observable (journald + per-reaction log + tmux).
 
-**Tech Stack:** Bash, `gh` CLI (GitHub REST/GraphQL), `claude` CLI (remote-control + bypassPermissions), tmux (dedicated socket), systemd (system unit, `User=exedev`), `flock`, `timeout`. Tests: pure-bash `check()` harness matching `test/run.sh` (no bats).
+> **Refinement after live test (Task 11):** the spec's reaction runtime was `claude --remote-control`, for live-steering. Launched detached inside the reaction tmux session, its TUI stalled — process state `T`, 0% CPU, the seeded prompt never ran. `--remote-control` needs an attended interactive TTY; it can't drive an unattended background process. Task 6's `review-react` now launches **headless** (`claude -p`), which runs the prompt autonomously to completion. Trade-off: no remote-control live-steering. Observability: the reaction log (`claude -p` buffers, so it mostly fills in on completion), `journalctl -u review-watcher`, `tmux -S ~/.review-watcher/tmux.sock attach` for a still-running session, and the PR itself updating. The tmux session per reaction is kept (isolation + `MAX_CONCURRENT` counting via `rw_session_name` → `<repo>-pr-<n>`); it's just no longer an RC window.
+
+**Tech Stack:** Bash, `gh` CLI (GitHub REST/GraphQL), `claude` CLI (headless `-p` + bypassPermissions), tmux (dedicated socket), systemd (system unit, `User=exedev`), `flock`, `timeout`. Tests: pure-bash `check()` harness matching `test/run.sh` (no bats).
 
 ## Global Constraints
 
 Copied verbatim from `docs/superpowers/specs/2026-07-08-review-watcher-design.md`. Every task's requirements implicitly include these.
 
 - **Permission mode:** launch reactions with `--permission-mode bypassPermissions`. Never set `permissions.defaultMode` globally.
-- **Reaction runtime:** `claude --remote-control "<repo>-pr-<n>" --permission-mode bypassPermissions "<prompt>"` — positional prompt, **no `-p`** (session must stay alive for RC).
+- **Reaction runtime:** `claude -p "<prompt>" --permission-mode bypassPermissions --verbose` — headless, runs to completion and exits. The reaction tmux session is kept for isolation and `MAX_CONCURRENT` counting, not for live-steering.
 - **Trust boundary:** only reviews authored by a login in `REVIEWER_ALLOWLIST` (default `nonrational`) trigger action; others → notify-only.
 - **Repo scope:** all visible @nonreagent open PRs (`gh search prs --author nonreagent --state open`).
 - **Skip:** draft PRs; reviews self-authored by `nonreagent`.
@@ -483,7 +485,7 @@ git commit -m "Review watcher: PR enumeration + latest-review read"
 - Test: manual (integration; launches `claude`).
 
 **Interfaces:**
-- Consumes: `rw_load_config`, `rw_session_name`, `rw_render_playbook`, `rw_mark_seen`, `RW_HOME`.
+- Consumes: `rw_load_config`, `rw_render_playbook`, `rw_mark_seen`, `RW_HOME`.
 - Produces: CLI `review-react <owner> <repo> <pr> <review_id> <review_state> <reviewer>`. Holds a per-PR `flock`, ensures a clone under `$RW_HOME/repos/<owner>/<repo>`, checks out the PR branch, launches `claude` under `timeout`, and on success calls `rw_mark_seen`. A `RW_DRY_RUN=1` env prints the `claude` command instead of running it (used by Step 2).
 
 - [ ] **Step 1: Write the wrapper**
@@ -503,11 +505,13 @@ exec 9>"$lock"
 flock -n 9 || { echo "review-react: $owner/$repo#$pr already in flight, skipping" >&2; exit 0; }
 
 prompt="$(rw_render_playbook "$RW_HOME/playbook.md" "$repo" "$pr" "$state" "$reviewer")"
-session="$(rw_session_name "$owner" "$repo" "$pr")"
 log="$RW_HOME/logs/${repo}-pr-${pr}.log"
 
-cmd=(timeout "$REACTION_TIMEOUT" claude --remote-control "$session"
-     --permission-mode bypassPermissions "$prompt")
+# Headless: --remote-control needs an attended TTY and stalls in a detached tmux
+# session, so run non-interactively. --verbose streams turn-by-turn to the log so
+# `tail -f` shows live progress.
+cmd=(timeout "$REACTION_TIMEOUT" claude -p "$prompt"
+     --permission-mode bypassPermissions --verbose)
 
 if [ "${RW_DRY_RUN:-0}" = "1" ]; then
   printf '%q ' "${cmd[@]}"; echo; exit 0
@@ -545,7 +549,7 @@ cp overlay/review-watcher/config.example "$RW_HOME/config"
 cp overlay/review-watcher/playbook.md "$RW_HOME/playbook.md"
 RW_HOME="$RW_HOME" RW_DRY_RUN=1 overlay/bin/review-react nonrational lizzie 131 REVIEW_X CHANGES_REQUESTED nonrational
 ```
-Expected: a single line beginning `timeout 1500 claude --remote-control lizzie-pr-131 --permission-mode bypassPermissions` followed by the quoted prompt, exit 0. Confirm **no** `-p` flag and the repo-qualified session name.
+Expected: a single line beginning `timeout 1500 claude -p` followed by the quoted prompt, then `--permission-mode bypassPermissions --verbose`, exit 0. Confirm headless `-p` (no `--remote-control`).
 
 - [ ] **Step 3: Commit**
 
@@ -833,7 +837,7 @@ Expected: periodic poll output (or silence if no unseen reviews), no crash loop.
 
 On a throwaway @nonreagent PR, have @nonrational leave a `CHANGES_REQUESTED` review. Within ~`POLL_INTERVAL`s:
 - Run: `tmux -S ~/.review-watcher/tmux.sock list-windows` → a `pr-<n>` window appears.
-- Run: `tmux -S ~/.review-watcher/tmux.sock attach` → watch the reaction; or open the session in claude.ai (green dot).
+- Run: `tmux -S ~/.review-watcher/tmux.sock attach` → watch the reaction while it's still running; or `tail -f ~/.review-watcher/logs/<repo>-pr-<n>.log`.
 Expected: the branch gets an addressing commit + push, an in-thread reply, and a re-requested review; the review id lands in `~/.review-watcher/state/`.
 
 - [ ] **Step 4: Verify the kill switch**
@@ -893,7 +897,7 @@ Run: `bash test/review-watcher.test.sh` → `19 passed, 0 failed`.
 
 **Spec coverage:**
 - Poll detector, token-free → Tasks 5, 7. ✓
-- Live RC tmux window per reaction, `bypassPermissions`, repo-qualified session name → Task 6 (open-risk #3 resolved via `rw_session_name`). ✓
+- Headless reaction (`claude -p`), `bypassPermissions`, repo-qualified tmux session name → Task 6 (open-risk #3 resolved via `rw_session_name`; runtime revised from RC to headless after the Task 11 live test). ✓
 - Trust allowlist; others notify-only; skip drafts; ignore self-reviews → Task 3. ✓
 - All-visible scope → Task 5 (`rw_open_prs`). ✓
 - At-most-once dedup, retry-on-failure → Tasks 2, 6 (`rw_mark_seen` only on success). ✓

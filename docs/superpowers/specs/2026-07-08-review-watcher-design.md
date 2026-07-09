@@ -10,8 +10,9 @@
 
 A watcher that runs on the exe.dev VM and **autonomously reacts to GitHub PR reviews**
 on @nonreagent's open pull requests. A cheap bash poll loop detects new reviews; when a
-trusted reviewer acts, it spawns a Claude Code session (in its own tmux window, remote-control
-enabled) that carries out the reaction — address change requests, or merge on approval.
+trusted reviewer acts, it spawns a headless Claude Code session (`claude -p`, in its own tmux
+session for isolation) that carries out the reaction — address change requests, or merge on
+approval.
 
 The detector is token-free. Tokens are spent only when a real, trusted, actionable review
 arrives and a reaction session is launched.
@@ -32,20 +33,32 @@ loop by hand across a private project repo:
 The key lesson: reactions need **judgment**, not a fixed script. So each reaction is a full
 Claude Code session seeded with a playbook; the watcher's own job is only **detect → dispatch → track**.
 
+**Revised after live test (Task 11):** the original design launched reactions with
+`claude --remote-control`, for live-steering. Launched detached inside the reaction tmux session,
+its TUI stalled — process state `T`, 0% CPU, the seeded prompt never ran. `--remote-control` needs
+an attended interactive TTY; it can't drive an unattended background process. Reactions now launch
+**headless** (`claude -p`), which runs the prompt autonomously to completion. Trade-off: no more
+live-steering a reaction from claude.ai or a phone — RC is an attended feature. Observability
+shifts to the reaction log (`~/.review-watcher/logs/<repo>-pr-<n>.log`; `claude -p` buffers, so it
+flushes on completion), `journalctl -u review-watcher` for the supervisor, `tmux -S
+~/.review-watcher/tmux.sock attach` for a still-running session, and the PR itself updating. The
+tmux **session** per reaction is kept — still useful for isolation and `MAX_CONCURRENT` counting
+via `rw_session_name` (`<repo>-pr-<n>`) — it's just no longer an RC window.
+
 ## Locked decisions
 
 | # | Decision | Choice |
 |---|----------|--------|
 | 1 | Autonomy | **Full.** changes-requested → address & re-request; approved → verify + squash-merge; commented → reply if actionable |
 | 2 | Trigger | **Polling** (~45s bash + `gh`; token-free) |
-| 3 | Reaction runtime | **Live tmux window per reaction**, remote-control enabled |
+| 3 | Reaction runtime | **Headless (`claude -p`) per reaction**; tmux session kept for isolation + concurrency counting |
 | 4 | Trust boundary | **Operator allowlist** (default: `nonrational`). Others → notify-only |
 | 5 | Repo scope | **All visible** @nonreagent open PRs (`gh search prs`) |
 | 6 | Permission mode | **`bypassPermissions`** (disposable VM, no user data; cheaper + faster than `auto`) |
 | 7 | Rollout | **Live from commit one** (no shadow mode; @nonreagent's access is limited) |
 | 8 | Lifecycle | **systemd system service** (`User=exedev`, `Restart=always`) supervising a persistent tmux session |
 | 9 | Placement | **`overlay/`** (agent-only); scripts on PATH via `home/bin`; runtime state in `~/.review-watcher` |
-| 10 | Notifications | **GitHub-native + RC** (re-request/comment/merge already ping; sessions appear in claude.ai) |
+| 10 | Notifications | **GitHub-native + logs** (re-request/comment/merge already ping; observe via the reaction log + `journalctl`) |
 
 ## Architecture
 
@@ -76,9 +89,10 @@ Three components with clean boundaries. Only the third spends tokens.
                     ▼
 ┌─ reaction  (claude session — the ONLY token spend) ─────────────────┐
 │  cd <repo clone on PR branch>                                       │
-│  claude --remote-control "pr-{n}" --permission-mode bypassPermissions│
-│         "<playbook + PR/review context>"                            │
-│  runs playbook autonomously; attach via tmux OR steer from claude.ai │
+│  claude -p "<playbook + PR/review context>"                         │
+│         --permission-mode bypassPermissions --verbose               │
+│  runs headless to completion; observe via the reaction log,          │
+│  journalctl, or tmux attach while still running                      │
 │  on exit: mark review seen, release lock, emit outcome              │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -189,22 +203,25 @@ unattended session never stalls.
 
 ## Reaction invocation
 
-Confirmed against Claude Code docs (v2.1.204 on the VM; RC needs ≥ 2.1.51):
+Confirmed against Claude Code docs (v2.1.204 on the VM):
 
 ```bash
 cd "$REPO_CHECKOUT"           # PR branch checked out; loads project CLAUDE.md + rules
-claude --remote-control "pr-${PR}" \
-       --permission-mode bypassPermissions \
-       "$(render_playbook "$REPO" "$PR" "$REVIEW")"
+timeout "$REACTION_TIMEOUT" claude -p "$(render_playbook "$REPO" "$PR" "$REVIEW")" \
+       --permission-mode bypassPermissions --verbose
 ```
 
-- A **positional prompt without `-p`** runs the prompt and **keeps the session alive** — required
-  so RC stays connected. `-p` would exit and drop RC.
-- Remote-control + permission-mode compose order-independently. The session appears in
-  claude.ai/code (and the mobile app) with a green dot; steer or watch from anywhere.
-- Auth: the VM already has a claude.ai **Max** OAuth login with the `user:sessions:claude_code`
-  scope; no API key / `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_BASE_URL` set (all RC-breakers
-  absent). Token auto-refreshes.
+- **Headless (`-p`), not `--remote-control`.** `-p` runs the prompt autonomously to completion and
+  exits — no attended TUI, no live-steering. See "Revised after live test" in the Motivation
+  section: `--remote-control` needs an attended interactive TTY and stalled when launched detached.
+- `--verbose` is intended to stream turn-by-turn progress to stdout, which `review-react` captures
+  to the per-PR reaction log; in practice `claude -p`'s output tends to buffer, so the log mostly
+  fills in on completion rather than growing live.
+- The tmux **session** per reaction survives unchanged — kept for isolation and for
+  `MAX_CONCURRENT` counting (`rw_session_name` → `<repo>-pr-<n>`) — it's just a plain headless
+  process now, not an RC window.
+- Auth: the VM already has a claude.ai **Max** OAuth login; `claude -p` runs under the same
+  subscription, no API key / `ANTHROPIC_BASE_URL` needed. Token auto-refreshes.
 
 ## Lifecycle & persistence
 
@@ -213,13 +230,14 @@ A **systemd system service** (`/etc/systemd/system/review-watcher.service`, `Use
 runner — ensures a persistent **tmux session** `review-watcher` exists with the supervisor in
 window 0.
 
-- Survives **reboot + disconnect** (systemd) *and* is **attachable**
-  (`tmux attach -t review-watcher`) to watch reactions live.
-- Observability, four ways: `journalctl -u review-watcher` (supervisor),
-  `tail -f ~/.review-watcher/logs/pr-{n}.log` (per reaction), `tmux attach` (live),
-  claude.ai/RC (remote).
-- RC caveat: the reaction `claude` process must stay alive (don't kill the tmux window) and the
-  VM must keep network to `api.anthropic.com`; an outage > ~10m ends an RC session.
+- Survives **reboot + disconnect** (systemd) *and* the reaction tmux session is **attachable**
+  (`tmux -S ~/.review-watcher/tmux.sock attach`) while a reaction is still running.
+- Observability, three ways: `journalctl -u review-watcher` (supervisor), the per-reaction log
+  `~/.review-watcher/logs/<repo>-pr-<n>.log` (`claude -p` buffers, so it mostly fills in on
+  completion), `tmux attach` (live, while the process is still running).
+- The reaction runs headless to completion under `timeout $REACTION_TIMEOUT`; if the VM loses
+  network to `api.anthropic.com` mid-run, the reaction just fails/times out like any other API
+  call — no separate RC-specific outage window to reason about.
 
 ## Placement in the dotfiles
 
@@ -257,12 +275,13 @@ REACTION_TIMEOUT=1500        # seconds before a stuck reaction is killed (25m)
 
 ## Notifications (v1)
 
-**GitHub-native + RC**, no new infra:
+**GitHub-native + logs**, no new infra:
 
 - The bot's own actions already ping you: re-request-review, a merge, or an in-thread reply all
   generate GitHub notifications.
 - notify-only / escalation posts a short comment tagging @nonrational.
-- Acted sessions appear in your claude.ai session list; per-reaction logs on the VM.
+- Per-reaction logs on the VM (`~/.review-watcher/logs/<repo>-pr-<n>.log`); `tmux attach` while a
+  reaction is still running.
 
 If the GitHub pings prove too quiet, add a phone push (ntfy/Pushover) later. **YAGNI now.**
 
@@ -273,8 +292,9 @@ If the GitHub pings prove too quiet, add a phone push (ntfy/Pushover) later. **Y
    reaction). Fallback: a trust-bootstrap step in `review-react` on first clone.
 2. **`gh search prs` latency/pagination** across all visible repos — bound result size; ensure
    pagination doesn't miss PRs.
-3. **RC session naming collisions** — `pr-{n}` isn't globally unique across repos; include the
-   repo (`{repo}-pr-{n}`) or use `CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX`.
+3. **Reaction tmux session naming collisions** — `pr-{n}` isn't globally unique across repos;
+   include the repo (`{repo}-pr-{n}`) so per-PR isolation and `MAX_CONCURRENT` counting don't
+   collide across repos.
 4. **Reaction idempotency** — verify re-running a reaction after a mid-flight crash can't
    double-comment or double-merge (guard on current PR state at the top of the playbook).
 5. **Loop safety** — confirm the bot's own pushes/replies/re-requests don't count as new reviews
@@ -299,5 +319,6 @@ If the GitHub pings prove too quiet, add a phone push (ntfy/Pushover) later. **Y
    and the PR is mergeable — conflicts resolved if `main` moved.
 3. A review by a non-allowlisted user results in notify-only, no code changes or merges.
 4. The watcher survives a VM reboot and does not re-react to already-handled reviews.
-5. Any reaction is observable live via `tmux attach` and remotely via claude.ai.
+5. Any reaction is observable via the reaction log (fills in on completion), `journalctl`, and
+   live via `tmux attach` while it's still running.
 6. `systemctl stop review-watcher` (or the `PAUSED` flag) halts all new reactions.
