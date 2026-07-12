@@ -74,7 +74,7 @@ while IFS= read -r entry || [ -n "$entry" ]; do
   cond="${mcond[$idx]}"
   case "$cond" in
     "" | os=Linux) ;;                                   # allowlist ∩ os=Linux
-    *) echo "skip: $entry (upstream condition '$cond' not Linux)"; continue ;;
+    *) echo "skip: $entry (upstream condition '$cond' not Linux)" >&2; continue ;;
   esac
   S="${msrc[$idx]}"
   relbase="$(home_rel "${mtrg[$idx]}")" || exit 1
