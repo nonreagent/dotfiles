@@ -31,13 +31,13 @@ normalize_parents() {
 }
 while IFS= read -r line || [ -n "$line" ]; do
   line="${line%%#*}"; [ -z "${line//[[:space:]]/}" ] && continue
-  # shellcheck disable=SC2086
-  set -- $line
-  trg="${2/#\~/$HOME}"
+  read -r _src trg _rest <<<"$line"
+  trg="${trg/#\~/$HOME}"
   normalize_parents "$trg"
 done < "$REPO/manifest"
 
-"$REPO/deploy.sh" apply
+rc=0
+"$REPO/deploy.sh" apply || rc=$?
 
 cat <<'EOF'
 
@@ -45,3 +45,5 @@ Next steps on this VM:
   1. gh auth login                    # as @nonreagent (sets up the git credential helper)
   2. ~/.claude/sync-plugins.sh        # install enabled Claude plugins
 EOF
+
+exit "$rc"
