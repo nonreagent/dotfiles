@@ -56,12 +56,40 @@ test_allowlist_resolves() {
   [ ! -e "$REPO/home/.bashrc.Darwin" ] || { echo "  Darwin fragment leaked" >&2; return 1; }
 }
 
+test_manifest_covers_home() {
+  "$REPO/build.sh" >/dev/null || return 1
+  local a b
+  a="$(cd "$REPO/home" && find . -type f | sed 's|^\./|home/|' | LC_ALL=C sort)"
+  b="$(grep -v '^[[:space:]]*#' "$REPO/manifest" | awk 'NF{print $1}' | LC_ALL=C sort)"
+  [ "$a" = "$b" ] || { echo "  manifest != home/ file set" >&2; return 1; }
+}
+
+test_deploy_apply() {
+  local tmp rc=0 rel; tmp="$(mktemp -d)"
+  HOME="$tmp" "$REPO/install.sh" >/dev/null 2>&1 || { rm -rf "$tmp"; return 1; }
+  # every home/ file is a symlink in $tmp pointing back into the repo
+  while IFS= read -r f; do
+    rel="${f#"$REPO"/home/}"
+    [ "$(readlink "$tmp/$rel" 2>/dev/null)" = "$REPO/home/$rel" ] \
+      || { echo "  not linked: $rel" >&2; rc=1; }
+  done < <(find "$REPO/home" -type f)
+  # audit is clean, and a second apply is a no-op (no new backups)
+  HOME="$tmp" "$REPO/deploy.sh" audit >/dev/null 2>&1 || { echo "  audit dirty" >&2; rc=1; }
+  if HOME="$tmp" "$REPO/deploy.sh" apply 2>/dev/null | grep -q backup; then
+    echo "  second apply not idempotent" >&2; rc=1
+  fi
+  rm -rf "$tmp"
+  return "$rc"
+}
+
 check test_idempotent
 check test_no_secrets
 check test_identity
 check test_base_preserved
 check test_review_watcher_units
 check test_allowlist_resolves
+check test_manifest_covers_home
+check test_deploy_apply
 echo "----"
 echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]
