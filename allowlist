@@ -1,6 +1,11 @@
-# Paths vendored verbatim from $DOTFILES into home/ (same relative path).
-# One per line; '#' starts a comment. Special-cased paths (.gitconfig, bin.Linux,
-# .claude/CLAUDE.md) are handled in build.sh and intentionally omitted here.
+# Selection layer: which upstream paths the @nonreagent agent gets. One path per
+# line; '#' starts a comment. Each entry is resolved against nonrational/dotfiles'
+# `manifest` (the placement layer) — build.sh reads the target + condition from
+# there. Identity-bearing / transformed files (.gitconfig, .claude/CLAUDE.md) are
+# NOT here; build.sh's transformation layer writes them.
+
+# bin (resolves to the upstream `bin.Linux ~/bin os=Linux` row -> home/bin)
+bin.Linux
 
 # shell
 .bashrc

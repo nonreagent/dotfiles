@@ -28,28 +28,71 @@ fi
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-# 1. Vendor the manifest paths — only GIT-TRACKED files, so we honor the dotfiles
-#    allowlist. The live ~/.dotfiles/.claude is symlinked to ~/.claude and holds
-#    untracked runtime state (e.g. ~10k installed-plugin files) that must NOT ship.
-#    Tracked skills are symlinks into the mattpocock submodule, so dereference them
-#    (cp -RL) into real content and the agent stays self-contained.
-while IFS= read -r line; do
-  line="${line%%#*}"; line="$(echo "$line" | xargs)"   # strip comment + trim
-  [ -z "$line" ] && continue
+# 1. Selection resolved against placement. Read the upstream manifest (the
+#    placement layer) into parallel arrays, then for each allowlist entry (the
+#    selection layer) find the row that PLACES it and materialize its tracked
+#    files at the manifest-declared target. Only GIT-TRACKED files are copied, so
+#    ~/.claude runtime state never ships; symlinks into submodules are deref'd
+#    (cp -RL) so the agent stays self-contained.
+UPSTREAM_MANIFEST="$DOTFILES/manifest"
+[ -f "$UPSTREAM_MANIFEST" ] || { echo "error: upstream manifest not found at $UPSTREAM_MANIFEST" >&2; exit 1; }
+
+msrc=(); mtrg=(); mcond=()
+while IFS= read -r line || [ -n "$line" ]; do
+  line="${line%%#*}"
+  [ -z "${line//[[:space:]]/}" ] && continue
+  read -r _s _t _c _rest <<<"$line"
+  msrc+=("$_s"); mtrg+=("$_t"); mcond+=("$_c")
+done < "$UPSTREAM_MANIFEST"
+
+# Longest source that is the path itself or a directory-prefix of it. Echoes the
+# array index, or nothing if no row places the path.
+resolve_row() {
+  local path="$1" best=-1 bestlen=-1 i s
+  for i in "${!msrc[@]}"; do
+    s="${msrc[$i]}"
+    if [ "$s" = "$path" ] || [ "${path#"$s"/}" != "$path" ]; then
+      if [ "${#s}" -gt "$bestlen" ]; then best="$i"; bestlen="${#s}"; fi
+    fi
+  done
+  [ "$best" -ge 0 ] && printf '%s\n' "$best"
+}
+
+# "~/.claude" -> ".claude". VM only vendors under $HOME, so require the ~/ form.
+home_rel() {
+  case "$1" in
+    "~/"*) printf '%s\n' "${1#\~/}" ;;
+    *) echo "error: manifest target '$1' is not under ~/ (cannot vendor)" >&2; return 1 ;;
+  esac
+}
+
+while IFS= read -r entry || [ -n "$entry" ]; do
+  entry="${entry%%#*}"; entry="$(echo "$entry" | xargs)"
+  [ -z "$entry" ] && continue
+  idx="$(resolve_row "$entry")"
+  [ -n "$idx" ] || { echo "error: allowlist '$entry': no upstream manifest row places it" >&2; exit 1; }
+  cond="${mcond[$idx]}"
+  case "$cond" in
+    "" | os=Linux) ;;                                   # allowlist ∩ os=Linux
+    *) echo "skip: $entry (upstream condition '$cond' not Linux)"; continue ;;
+  esac
+  S="${msrc[$idx]}"
+  relbase="$(home_rel "${mtrg[$idx]}")" || exit 1
   n=0
-  while IFS= read -r -d '' entry; do
-    mode="${entry%% *}"; file="${entry#*$'\t'}"        # `ls-files -s` => "<mode> <sha> <stage>\t<path>"
-    src="$DOTFILES/$file"; dst="$OUT/$file"
+  while IFS= read -r -d '' f; do
+    mode="${f%% *}"; P="${f#*$'\t'}"                    # `ls-files -s` => "<mode> <sha> <stage>\t<path>"
+    Prel="${P#"$S"/}"; [ "$Prel" = "$P" ] && Prel=""    # P == S (single-file source)
+    dst="$OUT/$relbase${Prel:+/$Prel}"
     mkdir -p "$(dirname "$dst")"
     case "$mode" in
-      120000) cp -RL "$src" "$dst" ;;   # symlink -> copy the resolved target content
-      160000) : ;;                      # gitlink/submodule entry -> skip
-      *)      cp "$src" "$dst" ;;        # regular file
+      120000) cp -RL "$DOTFILES/$P" "$dst" ;;           # symlink -> resolved content
+      160000) : ;;                                      # gitlink/submodule -> skip
+      *)      cp "$DOTFILES/$P" "$dst" ;;
     esac
     n=$((n + 1))
-  done < <(git -C "$DOTFILES" ls-files -s -z -- "$line")
-  [ "$n" -gt 0 ] || { echo "error: no tracked files for manifest path: $line" >&2; exit 1; }
-done < "$REPO/manifest"
+  done < <(git -C "$DOTFILES" ls-files -s -z -- "$entry")
+  [ "$n" -gt 0 ] || { echo "error: no tracked files for allowlist path: $entry" >&2; exit 1; }
+done < "$REPO/allowlist"
 
 # 2. git identity split: vendor shared, strip the human's identity, overlay owns it.
 shared="$OUT/.gitconfig.shared"
@@ -59,10 +102,7 @@ for key in user.name user.email github.user commit.gpgsign; do
 done
 cp "$OVERLAY/gitconfig" "$OUT/.gitconfig"
 
-# 3. bin.Linux -> bin
-cp -R "$DOTFILES/bin.Linux" "$OUT/bin"
-
-# 3b. nonreagent overlay bin scripts (agent-only tools; e.g. the review watcher).
+# 3. nonreagent overlay bin scripts (agent-only tools; e.g. the review watcher).
 cp "$OVERLAY"/bin/* "$OUT/bin/"
 
 # 4. claude entrypoint + exe context + agent identity from the overlay (macos import dropped).
