@@ -46,11 +46,22 @@ test_base_preserved() {
 
 test_review_watcher_units() { bash "$REPO/test/review-watcher.test.sh" >/dev/null; }
 
+test_allowlist_resolves() {
+  "$REPO/build.sh" >/dev/null || return 1
+  # bin.Linux resolved to the manifest's ~/bin target (special case gone):
+  [ -d "$REPO/home/bin" ] || { echo "  home/bin missing" >&2; return 1; }
+  # a curated .claude sub-path resolved via the .claude prefix row:
+  [ -f "$REPO/home/.claude/rules/language.md" ] || { echo "  .claude subpath missing" >&2; return 1; }
+  # a Darwin fragment must NOT be vendored even if it sneaks into the allowlist:
+  [ ! -e "$REPO/home/.bashrc.Darwin" ] || { echo "  Darwin fragment leaked" >&2; return 1; }
+}
+
 check test_idempotent
 check test_no_secrets
 check test_identity
 check test_base_preserved
 check test_review_watcher_units
+check test_allowlist_resolves
 echo "----"
 echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]
