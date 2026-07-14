@@ -62,6 +62,9 @@ cp "$OVERLAY/gitconfig" "$OUT/.gitconfig"
 # 3. bin.Linux -> bin
 cp -R "$DOTFILES/bin.Linux" "$OUT/bin"
 
+# 3b. nonreagent overlay bin scripts (agent-only tools; e.g. the review watcher).
+cp "$OVERLAY"/bin/* "$OUT/bin/"
+
 # 4. claude entrypoint + exe context + agent identity from the overlay (macos import dropped).
 mkdir -p "$OUT/.claude"
 cp "$OVERLAY/claude-CLAUDE.md" "$OUT/.claude/CLAUDE.md"
@@ -76,6 +79,16 @@ cat >> "$OUT/.bashrc.Linux" <<'SNIPPET'
 # --- nonreagent overlay (exe.dev) ---
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+SNIPPET
+
+# 5b. tmux: agents don't want mouse reporting — it injects mouse escape sequences
+#     into the pane and fights programmatic copy/paste. Upstream sets `mouse on`;
+#     append an override to the vendored config (same overlay pattern as the
+#     .bashrc.Linux block above), which lands last so `off` wins.
+cat >> "$OUT/.tmux.conf" <<'SNIPPET'
+
+# --- nonreagent overlay (exe.dev): disable mouse reporting for agent terminals
+set -g mouse off
 SNIPPET
 
 # 6. Silence "not added to PATH" noise: the checks run in .bash_profile at login,

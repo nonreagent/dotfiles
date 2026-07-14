@@ -62,11 +62,14 @@ test_orphan_pruned() {
   [ "$rc" -eq 0 ]
 }
 
+test_review_watcher_units() { bash "$REPO/test/review-watcher.test.sh" >/dev/null; }
+
 check test_idempotent
 check test_no_secrets
 check test_identity
 check test_base_preserved
 check test_orphan_pruned
+check test_review_watcher_units
 echo "----"
 echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]
