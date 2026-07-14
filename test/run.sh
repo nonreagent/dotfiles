@@ -44,12 +44,31 @@ test_base_preserved() {
   [ "$before" = "$after" ]
 }
 
+test_orphan_pruned() {
+  local tmp; tmp="$(mktemp -d)"
+  HOME="$tmp" "$REPO/install.sh" >/dev/null 2>&1 || { rm -rf "$tmp"; return 1; }
+  # orphan: a broken link into our home/ (simulates a file moved/removed upstream)
+  ln -s "$REPO/home/.claude/__gone__.md" "$tmp/.claude/__gone__.md"
+  # control A: broken link NOT pointing into home/ — must be preserved
+  ln -s "/does/not/exist" "$tmp/.claude/__external__"
+  # control B: valid unrelated symlink — must be preserved
+  : > "$tmp/__real__"; ln -s "$tmp/__real__" "$tmp/.claude/__valid__"
+  HOME="$tmp" "$REPO/install.sh" >/dev/null 2>&1 || { rm -rf "$tmp"; return 1; }
+  local rc=0
+  [ -L "$tmp/.claude/__gone__.md" ]  && rc=1   # orphan should be gone
+  [ -L "$tmp/.claude/__external__" ] || rc=1   # external dangling link should remain
+  [ -L "$tmp/.claude/__valid__" ]    || rc=1   # valid link should remain
+  rm -rf "$tmp"
+  [ "$rc" -eq 0 ]
+}
+
 test_review_watcher_units() { bash "$REPO/test/review-watcher.test.sh" >/dev/null; }
 
 check test_idempotent
 check test_no_secrets
 check test_identity
 check test_base_preserved
+check test_orphan_pruned
 check test_review_watcher_units
 echo "----"
 echo "$pass passed, $failc failed"
