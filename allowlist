@@ -1,0 +1,45 @@
+# Selection layer: which upstream paths the @nonreagent agent gets. One path per
+# line; '#' starts a comment. Each entry is resolved against nonrational/dotfiles'
+# `manifest` (the placement layer) — build.sh reads the target + condition from
+# there. Identity-bearing / transformed files (.gitconfig, .claude/CLAUDE.md) are
+# NOT here; build.sh's transformation layer writes them.
+
+# bin (resolves to the upstream `bin.Linux ~/bin os=Linux` row -> home/bin)
+bin.Linux
+
+# shell
+.bashrc
+.bashrc.Linux
+.bash_profile
+.bash_completion
+.bash_completion.d
+.inputrc
+
+# git (identity-bearing .gitconfig is special-cased; these are safe verbatim)
+.githelpers
+.gitignore_global
+
+# tmux / editor / repl
+.tmux.conf
+.vimrc
+.vim
+.irbrc
+.railsrc
+.screenrc
+
+# claude (curated subset; CLAUDE.md comes from the overlay. Upstream moved the
+# rule files under .claude/rules/; macos_interactions.md and code-review-register.md
+# are intentionally excluded.)
+.claude/rules/language.md
+.claude/rules/workflow.md
+.claude/rules/markdown.md
+.claude/rules/improvement.md
+.claude/rules/prudence.md
+.claude/settings.json
+.claude/sync-plugins.sh
+.claude/skills
+.claude/agents
+.claude/commands
+.claude/hooks
+.claude/output-styles
+.claude/plugins
