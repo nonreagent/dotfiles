@@ -25,6 +25,7 @@ home/.claude/settings.json	~/.claude/settings.json
 home/.claude/skills/.keep	~/.claude/skills/.keep
 home/.claude/skills/beautiful-prose/SKILL.md	~/.claude/skills/beautiful-prose/SKILL.md
 home/.claude/skills/caveman/SKILL.md	~/.claude/skills/caveman/SKILL.md
+home/.claude/skills/code-review-register/SKILL.md	~/.claude/skills/code-review-register/SKILL.md
 home/.claude/skills/diagnose/SKILL.md	~/.claude/skills/diagnose/SKILL.md
 home/.claude/skills/diagnose/scripts/hitl-loop.template.sh	~/.claude/skills/diagnose/scripts/hitl-loop.template.sh
 home/.claude/skills/find-inspiration/SKILL.md	~/.claude/skills/find-inspiration/SKILL.md
@@ -66,6 +67,9 @@ home/.claude/skills/to-prd/SKILL.md	~/.claude/skills/to-prd/SKILL.md
 home/.claude/skills/triage/AGENT-BRIEF.md	~/.claude/skills/triage/AGENT-BRIEF.md
 home/.claude/skills/triage/OUT-OF-SCOPE.md	~/.claude/skills/triage/OUT-OF-SCOPE.md
 home/.claude/skills/triage/SKILL.md	~/.claude/skills/triage/SKILL.md
+home/.claude/skills/ux-review/SKILL.md	~/.claude/skills/ux-review/SKILL.md
+home/.claude/skills/ux-review/references/lenses.md	~/.claude/skills/ux-review/references/lenses.md
+home/.claude/skills/ux-review/references/worked-example.md	~/.claude/skills/ux-review/references/worked-example.md
 home/.claude/skills/write-a-skill/SKILL.md	~/.claude/skills/write-a-skill/SKILL.md
 home/.claude/skills/zoom-out/SKILL.md	~/.claude/skills/zoom-out/SKILL.md
 home/.claude/sync-plugins.sh	~/.claude/sync-plugins.sh
