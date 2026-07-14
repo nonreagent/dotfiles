@@ -41,6 +41,23 @@ done < "$REPO/manifest"
 rc=0
 "$REPO/deploy.sh" apply || rc=$?
 
+# Link Antigravity CLI skills/rules into the real ~/.gemini directory.
+# Upstream handles this via a whole-directory .gemini symlink; we can't do that
+# because ~/.gemini holds runtime state, so create the two interior links instead.
+mkdir -p "$DEST/.gemini/antigravity-cli"
+for sym in skills rules; do
+  trg="$DEST/.gemini/antigravity-cli/$sym"
+  if [ -L "$trg" ]; then
+    [ "$(readlink "$trg")" = "../../.claude/$sym" ] && continue
+    rm -f "$trg"
+  elif [ -e "$trg" ]; then
+    echo "  [install] warning: $trg exists and is not a symlink, skipping" >&2
+    continue
+  fi
+  ln -s "../../.claude/$sym" "$trg"
+  echo "  [install] linked .gemini/antigravity-cli/$sym -> ../../.claude/$sym"
+done
+
 # Prune orphaned symlinks: links from an earlier install that now dangle because
 # their source moved or was removed from home/ (e.g. a file relocated into a subdir
 # upstream). Scoped to the roots we manage — the top-level entries of home/ — so we
