@@ -2,9 +2,11 @@
 # Install the agent home on the VM. The LINKING is delegated to the vendored
 # deploy.sh (the shared upstream placement engine) reading the generated manifest.
 # This wrapper only keeps what deploy.sh can't own: the VM-base-image pre-flight
-# (a host fact, not a placement fact) and the next-steps message.
+# (a host fact, not a placement fact), pruning symlinks orphaned by a move/removal
+# in home/, and the next-steps message.
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC="$REPO/home"
 
 [ -f "$REPO/manifest" ]   || { echo "error: no manifest; run build.sh first" >&2; exit 1; }
 [ -x "$REPO/deploy.sh" ]  || { echo "error: no vendored deploy.sh; run build.sh first" >&2; exit 1; }
@@ -38,6 +40,25 @@ done < "$REPO/manifest"
 
 rc=0
 "$REPO/deploy.sh" apply || rc=$?
+
+# Prune orphaned symlinks: links from an earlier install that now dangle because
+# their source moved or was removed from home/ (e.g. a file relocated into a subdir
+# upstream). Scoped to the roots we manage — the top-level entries of home/ — so we
+# never scan or touch anything outside them (.config, .codex). The safety invariant
+# is the target check: we only remove a BROKEN link that points back into this
+# clone's home/, so a user's own symlinks are never disturbed.
+pruned=0
+while IFS= read -r -d '' top; do
+  root="$DEST/${top#"$SRC"/}"
+  [ -e "$root" ] || [ -L "$root" ] || continue
+  while IFS= read -r -d '' l; do
+    [ -e "$l" ] && continue   # still resolves — keep
+    case "$(readlink "$l")" in
+      "$SRC"/*) rm -f "$l" && { echo "  [prune] ${l#"$DEST"/} (source removed from home/)"; pruned=$((pruned + 1)); } ;;
+    esac
+  done < <(find "$root" -type l -print0 2>/dev/null)
+done < <(find "$SRC" -mindepth 1 -maxdepth 1 -print0)
+[ "$pruned" -gt 0 ] && echo "pruned $pruned orphaned symlink(s)"
 
 cat <<'EOF'
 

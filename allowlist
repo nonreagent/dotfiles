@@ -34,6 +34,7 @@ bin.Linux
 .claude/rules/workflow.md
 .claude/rules/markdown.md
 .claude/rules/improvement.md
+.claude/rules/prudence.md
 .claude/settings.json
 .claude/sync-plugins.sh
 .claude/skills

@@ -19,6 +19,7 @@ home/.claude/plugins/marketplaces/.keep	~/.claude/plugins/marketplaces/.keep
 home/.claude/rules/improvement.md	~/.claude/rules/improvement.md
 home/.claude/rules/language.md	~/.claude/rules/language.md
 home/.claude/rules/markdown.md	~/.claude/rules/markdown.md
+home/.claude/rules/prudence.md	~/.claude/rules/prudence.md
 home/.claude/rules/workflow.md	~/.claude/rules/workflow.md
 home/.claude/settings.json	~/.claude/settings.json
 home/.claude/skills/.keep	~/.claude/skills/.keep

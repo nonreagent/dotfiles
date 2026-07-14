@@ -60,6 +60,7 @@ Design + plan: `docs/superpowers/specs/2026-07-08-review-watcher-design.md`, `do
 
 - **Source edits:** push to `nonrational/dotfiles`, then `./build.sh` here picks
   them up. To preview uncommitted edits, `DOTFILES=~/.dotfiles ./build.sh`.
-- **VM:** `git pull` (symlinks make it live immediately). Then `./deploy.sh
-  apply` to link any newly-added files, and `./deploy.sh audit` to confirm no
-  drift.
+- **VM:** `git pull` (symlinks make it live immediately). Re-run `./install.sh`
+  when files were added, moved, or removed — it links new files via `deploy.sh
+  apply` and prunes symlinks left dangling by a move/removal. `./deploy.sh
+  audit` confirms no drift at any time.
