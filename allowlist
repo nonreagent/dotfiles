@@ -1,45 +1,55 @@
 # Selection layer: which upstream paths the @nonreagent agent gets. One path per
-# line; '#' starts a comment. Each entry is resolved against nonrational/dotfiles'
-# `manifest` (the placement layer) — build.sh reads the target + condition from
-# there. Identity-bearing / transformed files (.gitconfig, .claude/CLAUDE.md) are
-# NOT here; build.sh's transformation layer writes them.
+# line; '#' starts a comment. Each entry is a path as it appears in
+# nonrational/dotfiles — upstream keeps its dotfiles under home/, so entries carry
+# that prefix and match its `manifest` (the placement layer) 1:1. build.sh reads
+# the target + condition from there. Identity-bearing / transformed files
+# (.gitconfig, .claude/CLAUDE.md) are NOT here; build.sh's transformation layer
+# writes them.
 
-# bin (resolves to the upstream `bin.Linux ~/bin os=Linux` row -> home/bin)
-bin.Linux
+# bin (resolves to the upstream `home/bin.Linux ~/bin os=Linux` row -> home/bin)
+home/bin.Linux
 
 # shell
-.bashrc
-.bashrc.Linux
-.bash_profile
-.bash_completion
-.bash_completion.d
-.inputrc
+home/.bashrc
+home/.bashrc.Linux
+home/.bash_profile
+home/.bash_completion
+home/.bash_completion.d
+home/.inputrc
 
 # git (identity-bearing .gitconfig is special-cased; these are safe verbatim)
-.githelpers
-.gitignore_global
+home/.githelpers
+home/.gitignore_global
 
 # tmux / editor / repl
-.tmux.conf
-.vimrc
-.vim
-.irbrc
-.railsrc
-.screenrc
+home/.tmux.conf
+home/.vimrc
+home/.vim
+home/.irbrc
+home/.railsrc
+home/.screenrc
 
 # claude (curated subset; CLAUDE.md comes from the overlay. Upstream moved the
-# rule files under .claude/rules/; macos_interactions.md and code-review-register.md
+# rule files under .claude/rules/; macos-interactions.md and skill-authoring.md
 # are intentionally excluded.)
-.claude/rules/language.md
-.claude/rules/workflow.md
-.claude/rules/markdown.md
-.claude/rules/improvement.md
-.claude/rules/prudence.md
-.claude/settings.json
-.claude/sync-plugins.sh
-.claude/skills
-.claude/agents
-.claude/commands
-.claude/hooks
-.claude/output-styles
-.claude/plugins
+home/.claude/rules/language.md
+home/.claude/rules/workflow.md
+home/.claude/rules/markdown.md
+home/.claude/rules/improvement.md
+home/.claude/rules/prudence.md
+home/.claude/settings.json
+home/.claude/sync-plugins.sh
+home/.claude/skills
+home/.claude/agents
+home/.claude/commands
+home/.claude/hooks
+home/.claude/output-styles
+home/.claude/plugins
+
+# antigravity CLI: just the two relative links into .claude, so ~/.gemini stays a
+# real directory holding its own runtime state. They resolve inside home/, so the
+# agent's Antigravity rules/skills track OUR curated .claude — build.sh keeps them
+# verbatim rather than materializing upstream's (wider) set. Antigravity's own
+# settings.json/keybindings.json are the human's, and stay out.
+home/.gemini/antigravity-cli/rules
+home/.gemini/antigravity-cli/skills

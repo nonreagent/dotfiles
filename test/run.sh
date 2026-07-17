@@ -6,7 +6,14 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pass=0; failc=0
 check() { if "$@"; then echo "PASS: $1"; pass=$((pass+1)); else echo "FAIL: $1"; failc=$((failc+1)); fi; }
 
-tree_hash() { ( cd "$1" && find . -type f -exec shasum {} \; | sort ); }
+# Files by content, links by target: a link kept by build.sh step 1b has no content
+# of its own, and where it points is the thing that must not drift between builds.
+tree_hash() {
+  ( cd "$1" \
+      && find . -type f -exec shasum {} \; \
+      && find . -type l -exec sh -c 'printf "%s  %s\n" "$(readlink "$1")" "$1"' _ {} \; \
+  ) | sort
+}
 
 test_idempotent() {
   "$REPO/build.sh" >/dev/null || return 1   # inherits DOTFILES from env if set, else clones
@@ -74,10 +81,32 @@ test_allowlist_resolves() {
   [ ! -e "$REPO/home/.bashrc.Darwin" ] || { echo "  Darwin fragment leaked" >&2; return 1; }
 }
 
+# build.sh step 1b, both branches. The kept-link case guards a silent leak: a link
+# into the vendored tree that got deref'd instead would resolve against the
+# UPSTREAM clone and quietly import the rules the allowlist excludes.
+test_symlink_policy() {
+  "$REPO/build.sh" >/dev/null || return 1
+  local rc=0 rules="$REPO/home/.gemini/antigravity-cli/rules" excluded
+  # kept: relative, resolves inside home/, points where upstream pointed it
+  [ -L "$rules" ] || { echo "  .gemini/rules is not a symlink" >&2; rc=1; }
+  [ "$(readlink "$rules" 2>/dev/null)" = "../../.claude/rules" ] \
+    || { echo "  .gemini/rules link text rewritten" >&2; rc=1; }
+  [ -e "$rules" ] || { echo "  .gemini/rules dangles inside home/" >&2; rc=1; }
+  # ...and so it tracks OUR curated set, not upstream's wider one
+  [ -f "$rules/language.md" ] || { echo "  curated rule unreachable via .gemini" >&2; rc=1; }
+  for excluded in macos-interactions.md skill-authoring.md; do
+    [ ! -e "$rules/$excluded" ] || { echo "  excluded rule leaked: $excluded" >&2; rc=1; }
+  done
+  # materialized: a link escaping the tree (skills -> ../ext/<submodule>) becomes real
+  [ -d "$REPO/home/.claude/skills/tdd" ] && [ ! -L "$REPO/home/.claude/skills/tdd" ] \
+    || { echo "  skills not materialized" >&2; rc=1; }
+  return "$rc"
+}
+
 test_manifest_covers_home() {
   "$REPO/build.sh" >/dev/null || return 1
   local a b
-  a="$(cd "$REPO/home" && find . -type f | sed 's|^\./|home/|' | LC_ALL=C sort)"
+  a="$(cd "$REPO/home" && find . \( -type f -o -type l \) | sed 's|^\./|home/|' | LC_ALL=C sort)"
   b="$(grep -v '^[[:space:]]*#' "$REPO/manifest" | awk 'NF{print $1}' | LC_ALL=C sort)"
   [ "$a" = "$b" ] || { echo "  manifest != home/ file set" >&2; return 1; }
 }
@@ -90,7 +119,7 @@ test_deploy_apply() {
     rel="${f#"$REPO"/home/}"
     [ "$(readlink "$tmp/$rel" 2>/dev/null)" = "$REPO/home/$rel" ] \
       || { echo "  not linked: $rel" >&2; rc=1; }
-  done < <(find "$REPO/home" -type f)
+  done < <(find "$REPO/home" \( -type f -o -type l \))
   # audit is clean, and a second apply is a no-op (no new backups)
   HOME="$tmp" "$REPO/deploy.sh" audit >/dev/null 2>&1 || { echo "  audit dirty" >&2; rc=1; }
   if HOME="$tmp" "$REPO/deploy.sh" apply 2>/dev/null | grep -q backup; then
@@ -107,6 +136,7 @@ check test_base_preserved
 check test_orphan_pruned
 check test_review_watcher_units
 check test_allowlist_resolves
+check test_symlink_policy
 check test_manifest_covers_home
 check test_deploy_apply
 echo "----"
