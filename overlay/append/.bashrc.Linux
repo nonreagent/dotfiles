@@ -1,0 +1,11 @@
+# --- nonreagent overlay (exe.dev) ---
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+# Auto-attach tmux on interactive SSH logins. `exec` means detaching from tmux
+# also ends the SSH session. The $- guard matters: this bashrc has no
+# non-interactive early return, and sshd-invoked bash sources it for remote
+# commands too.
+if [[ $- == *i* ]] && [ -n "$SSH_TTY" ] && [ -z "$TMUX" ] && command -v tmux >/dev/null; then
+  exec tmux new-session -A -s main
+fi

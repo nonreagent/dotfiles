@@ -142,36 +142,23 @@ cp "$OVERLAY/claude-CLAUDE.md" "$OUT/.claude/CLAUDE.md"
 cp "$OVERLAY/exe.md"           "$OUT/.claude/exe.md"
 cp "$OVERLAY/identity.md"      "$OUT/.claude/identity.md"
 
-# 5. Overlay shell env for the VM: XDG_RUNTIME_DIR (base .profile goes unread once
-#    .bash_profile exists) and Rust (rustup installs ~/.cargo/env; upstream now
-#    enables rust-analyzer-lsp). Guarded so the line is a no-op where cargo is absent.
-cat >> "$OUT/.bashrc.Linux" <<'SNIPPET'
-
-# --- nonreagent overlay (exe.dev) ---
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
-
-# Auto-attach tmux on interactive SSH logins. `exec` means detaching from tmux
-# also ends the SSH session. The $- guard matters: this bashrc has no
-# non-interactive early return, and sshd-invoked bash sources it for remote
-# commands too.
-if [[ $- == *i* ]] && [ -n "$SSH_TTY" ] && [ -z "$TMUX" ] && command -v tmux >/dev/null; then
-  exec tmux new-session -A -s main
-fi
-SNIPPET
-
-# 5b. tmux: agents don't want mouse reporting — it injects mouse escape sequences
-#     into the pane and fights programmatic copy/paste. Upstream sets `mouse on`;
-#     append an override to the vendored config (same overlay pattern as the
-#     .bashrc.Linux block above), which lands last so `off` wins.
-cat >> "$OUT/.tmux.conf" <<'SNIPPET'
-
-# --- nonreagent overlay (exe.dev): disable mouse reporting for agent terminals
-set -g mouse off
-SNIPPET
+# 5. Append overlay: every file under overlay/append/ is appended verbatim (after
+#    a blank-line separator) to the same-named vendored file. The content lives in
+#    those files, not here — to change what the agent's shell or tmux gets, edit
+#    overlay/append/*, never this script. Appending to a file upstream stopped
+#    shipping is a build error, not a silent new file.
+while IFS= read -r -d '' f; do
+  rel="${f#"$OVERLAY/append/"}"
+  [ -f "$OUT/$rel" ] || { echo "error: overlay/append/$rel: no vendored $rel to append to" >&2; exit 1; }
+  { echo; cat "$f"; } >> "$OUT/$rel"
+done < <(find "$OVERLAY/append" -type f -print0 | LC_ALL=C sort -z)
 
 # 6. Silence "not added to PATH" noise: the checks run in .bash_profile at login,
-#    before .bashrc.Linux, so patch the vendored copy directly.
+#    before .bashrc.Linux, so patch the vendored copy directly — an append can't
+#    reach it in time. Assert the knob still exists so upstream renaming it breaks
+#    the build instead of silently shipping the noise.
+grep -q '^BASH_REPORT_MISSING=true\b' "$OUT/.bash_profile" \
+  || { echo "error: BASH_REPORT_MISSING=true not found in .bash_profile; upstream changed the knob" >&2; exit 1; }
 perl -pi -e 's/^BASH_REPORT_MISSING=true\b/BASH_REPORT_MISSING=false/' "$OUT/.bash_profile"
 
 # 7. Refuse to ship anything sensitive.

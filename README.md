@@ -13,7 +13,8 @@ an agent-identity overlay.
 - `build.sh` clones [`nonrational/dotfiles`](https://github.com/nonrational/dotfiles)
   fresh from GitHub, copies that subset into the committed `home/` tree, and
   applies the `@nonreagent` overlay (git identity + `gh` auth, a macOS-free
-  `CLAUDE.md`, `XDG_RUNTIME_DIR`, path-noise silencing). It runs anywhere. It
+  `CLAUDE.md`, path-noise silencing, plus `overlay/append/*` blocks appended
+  verbatim to same-named vendored files — shell env, tmux). It runs anywhere. It
   also emits this repo's own `manifest` (generated — do not edit; one row per
   `home/` file) and vendors `deploy.sh`, the shared upstream placement engine.
 - `install.sh` (run on the VM) is a thin pre-flight over `deploy.sh apply`,
