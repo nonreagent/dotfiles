@@ -26,6 +26,12 @@ fi
 clone="$RW_HOME/repos/$owner/$repo"
 if [ -d "$clone/.git" ]; then
   git -C "$clone" fetch --quiet origin
+  # A prior reaction can leave the clone dirty (e.g. an agent ran build.sh without
+  # committing the result). An uncommitted tree blocks checkout below, which exits
+  # via set -e before rw_mark_seen runs — so the poll loop retries the same review
+  # forever. Force the clone clean every time so that can't happen.
+  git -C "$clone" reset --quiet --hard HEAD
+  git -C "$clone" clean --quiet -fd
 else
   gh repo clone "$owner/$repo" "$clone" -- --quiet
 fi
