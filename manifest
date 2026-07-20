@@ -53,6 +53,10 @@ home/.claude/skills/improve-codebase-architecture/HTML-REPORT.md	~/.claude/skill
 home/.claude/skills/improve-codebase-architecture/SKILL.md	~/.claude/skills/improve-codebase-architecture/SKILL.md
 home/.claude/skills/improve-codebase-architecture/agents/openai.yaml	~/.claude/skills/improve-codebase-architecture/agents/openai.yaml
 home/.claude/skills/prose-register/SKILL.md	~/.claude/skills/prose-register/SKILL.md
+home/.claude/skills/prose-register/evals-handoff-changed-my-mind.md	~/.claude/skills/prose-register/evals-handoff-changed-my-mind.md
+home/.claude/skills/prose-register/evals-handoff.md	~/.claude/skills/prose-register/evals-handoff.md
+home/.claude/skills/prose-register/evals.json	~/.claude/skills/prose-register/evals.json
+home/.claude/skills/prose-register/run-evals.mjs	~/.claude/skills/prose-register/run-evals.mjs
 home/.claude/skills/prototype/LOGIC.md	~/.claude/skills/prototype/LOGIC.md
 home/.claude/skills/prototype/SKILL.md	~/.claude/skills/prototype/SKILL.md
 home/.claude/skills/prototype/UI.md	~/.claude/skills/prototype/UI.md
