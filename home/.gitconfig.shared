@@ -1,7 +1,3 @@
-[hub]
-  protocol = https
-  user = nonrational
-
 [include]
   path = ~/.local/.gitconfig
   # OS-specific config; git silently skips missing include paths.

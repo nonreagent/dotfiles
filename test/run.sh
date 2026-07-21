@@ -75,8 +75,8 @@ test_allowlist_resolves() {
   "$REPO/build.sh" >/dev/null || return 1
   # bin.Linux resolved to the manifest's ~/bin target (special case gone):
   [ -d "$REPO/home/bin" ] || { echo "  home/bin missing" >&2; return 1; }
-  # a curated .claude sub-path resolved via the .claude prefix row:
-  [ -f "$REPO/home/.claude/rules/language.md" ] || { echo "  .claude subpath missing" >&2; return 1; }
+  # a curated sub-path resolved via the .agents prefix row:
+  [ -f "$REPO/home/.agents/rules/language.md" ] || { echo "  .agents subpath missing" >&2; return 1; }
   # a Darwin fragment must NOT be vendored even if it sneaks into the allowlist:
   [ ! -e "$REPO/home/.bashrc.Darwin" ] || { echo "  Darwin fragment leaked" >&2; return 1; }
 }
@@ -86,19 +86,22 @@ test_allowlist_resolves() {
 # UPSTREAM clone and quietly import the rules the allowlist excludes.
 test_symlink_policy() {
   "$REPO/build.sh" >/dev/null || return 1
-  local rc=0 rules="$REPO/home/.gemini/antigravity-cli/rules" excluded
+  local rc=0 rules="$REPO/home/.claude/rules" skills="$REPO/home/.gemini/antigravity-cli/skills" excluded
   # kept: relative, resolves inside home/, points where upstream pointed it
-  [ -L "$rules" ] || { echo "  .gemini/rules is not a symlink" >&2; rc=1; }
-  [ "$(readlink "$rules" 2>/dev/null)" = "../../.claude/rules" ] \
-    || { echo "  .gemini/rules link text rewritten" >&2; rc=1; }
-  [ -e "$rules" ] || { echo "  .gemini/rules dangles inside home/" >&2; rc=1; }
+  [ -L "$rules" ] || { echo "  .claude/rules is not a symlink" >&2; rc=1; }
+  [ "$(readlink "$rules" 2>/dev/null)" = "../.agents/rules" ] \
+    || { echo "  .claude/rules link text rewritten" >&2; rc=1; }
+  [ -e "$rules" ] || { echo "  .claude/rules dangles inside home/" >&2; rc=1; }
   # ...and so it tracks OUR curated set, not upstream's wider one
-  [ -f "$rules/language.md" ] || { echo "  curated rule unreachable via .gemini" >&2; rc=1; }
+  [ -f "$rules/language.md" ] || { echo "  curated rule unreachable via .claude" >&2; rc=1; }
   for excluded in macos-interactions.md skill-authoring.md; do
     [ ! -e "$rules/$excluded" ] || { echo "  excluded rule leaked: $excluded" >&2; rc=1; }
   done
-  # materialized: a link escaping the tree (skills -> ../ext/<submodule>) becomes real
-  [ -d "$REPO/home/.claude/skills/tdd" ] && [ ! -L "$REPO/home/.claude/skills/tdd" ] \
+  # the second-hop shim: ~/.gemini reaches the same vendored skills, still a link
+  [ -L "$skills" ] && [ -e "$skills" ] \
+    || { echo "  .gemini/skills not a resolving symlink" >&2; rc=1; }
+  # materialized: a link escaping the tree (skills/tdd -> ../ext/<submodule>) becomes real
+  [ -d "$REPO/home/.agents/skills/tdd" ] && [ ! -L "$REPO/home/.agents/skills/tdd" ] \
     || { echo "  skills not materialized" >&2; rc=1; }
   return "$rc"
 }

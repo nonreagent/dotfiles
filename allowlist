@@ -29,14 +29,24 @@ home/.irbrc
 home/.railsrc
 home/.screenrc
 
-# claude (curated subset; CLAUDE.md comes from the overlay. Upstream moved the
-# rule files under .claude/rules/; macos-interactions.md and skill-authoring.md
-# are intentionally excluded.)
-home/.claude/rules/language.md
-home/.claude/rules/workflow.md
-home/.claude/rules/markdown.md
-home/.claude/rules/improvement.md
-home/.claude/rules/prudence.md
+# agent config (upstream PR #16 made .agents the source of truth; ~/.claude and
+# ~/.gemini now reach it through shim symlinks). Rules stay curated here —
+# macos-interactions.md and skill-authoring.md are intentionally excluded — and
+# the .claude/rules shim below then resolves to exactly this set.
+home/.agents/rules/language.md
+home/.agents/rules/workflow.md
+home/.agents/rules/markdown.md
+home/.agents/rules/improvement.md
+home/.agents/rules/prudence.md
+
+# skills are taken wholesale; their per-skill links into the ext/ submodule
+# escape the vendored tree, so 1b materializes them (agent stays self-contained).
+home/.agents/skills
+
+# claude (CLAUDE.md comes from the overlay). rules/ and skills/ are upstream
+# shims into .agents/ — both resolve inside home/ now that .agents is vendored,
+# so 1b keeps them verbatim rather than deref'ing upstream's wider set.
+home/.claude/rules
 home/.claude/settings.json
 home/.claude/sync-plugins.sh
 home/.claude/skills
@@ -46,10 +56,10 @@ home/.claude/hooks
 home/.claude/output-styles
 home/.claude/plugins
 
-# antigravity CLI: just the two relative links into .claude, so ~/.gemini stays a
-# real directory holding its own runtime state. They resolve inside home/, so the
-# agent's Antigravity rules/skills track OUR curated .claude — build.sh keeps them
-# verbatim rather than materializing upstream's (wider) set. Antigravity's own
-# settings.json/keybindings.json are the human's, and stay out.
-home/.gemini/antigravity-cli/rules
+# antigravity CLI: just the relative link into .agents, so ~/.gemini stays a real
+# directory holding its own runtime state. It resolves inside home/, so the
+# agent's Antigravity skills track OUR vendored set — build.sh keeps it verbatim
+# rather than materializing upstream's. Antigravity's own settings.json/
+# keybindings.json are the human's, and stay out. (Upstream's antigravity-cli/
+# rules link went away with PR #16 — Antigravity never read it.)
 home/.gemini/antigravity-cli/skills
