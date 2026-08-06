@@ -137,6 +137,21 @@ cp "$OVERLAY/gitconfig" "$OUT/.gitconfig"
 # 3. nonreagent overlay bin scripts (agent-only tools; e.g. the review watcher).
 cp "$OVERLAY"/bin/* "$OUT/bin/"
 
+# 3b. Agent-only skills from the overlay. Upstream owns the shared skill set; a
+#     skill that exists only for @nonreagent lives in overlay/skills/<name>/ and
+#     is vendored alongside it. Refuse to shadow an upstream skill — a name
+#     collision means the skill graduated upstream and the overlay copy should be
+#     deleted, not silently win.
+if [ -d "$OVERLAY/skills" ]; then
+  for d in "$OVERLAY"/skills/*/; do
+    [ -d "$d" ] || continue
+    name="$(basename "$d")"
+    [ -e "$OUT/.agents/skills/$name" ] \
+      && { echo "error: overlay skill '$name' also exists upstream; drop the overlay copy" >&2; exit 1; }
+    cp -R "$d" "$OUT/.agents/skills/$name"
+  done
+fi
+
 # 4. claude entrypoint + exe context + agent identity from the overlay (macos import dropped).
 mkdir -p "$OUT/.claude"
 cp "$OVERLAY/claude-CLAUDE.md" "$OUT/.claude/CLAUDE.md"
