@@ -20,6 +20,7 @@ home/.inputrc
 # git (identity-bearing .gitconfig is special-cased; these are safe verbatim)
 home/.githelpers
 home/.gitignore_global
+home/.gitconfig.git-town
 
 # tmux / editor / repl
 home/.tmux.conf

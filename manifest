@@ -96,6 +96,7 @@ home/.claude/skills	~/.claude/skills
 home/.claude/sync-plugins.sh	~/.claude/sync-plugins.sh
 home/.gemini/antigravity-cli/skills	~/.gemini/antigravity-cli/skills
 home/.gitconfig	~/.gitconfig
+home/.gitconfig.git-town	~/.gitconfig.git-town
 home/.gitconfig.shared	~/.gitconfig.shared
 home/.githelpers	~/.githelpers
 home/.gitignore_global	~/.gitignore_global
