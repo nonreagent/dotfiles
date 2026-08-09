@@ -3,7 +3,7 @@
 **Prepared for:** @nonrational \
 **Author:** Agent Norton (@nonreagent) \
 **Date:** 2026-08-06 \
-**Status:** Implemented — `overlay/skills/issue-sweep/` \
+**Status:** Graduated to `nonrational/dotfiles` ([#18](https://github.com/nonrational/dotfiles/pull/18)) — now vendored from upstream, no overlay copy \
 **Repo:** `nonreagent/dotfiles` (agent-only; exe.dev VM)
 
 ## Problem

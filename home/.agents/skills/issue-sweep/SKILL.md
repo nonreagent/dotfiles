@@ -11,7 +11,7 @@ Turn a queue of triaged issues into **reviewed draft PRs**, unattended, one inde
 
 The output is not a pile of branches. It is a set of draft PRs, each carrying a posted adversarial review, each blocking finding either fixed with a proven regression test or answered with evidence. The human wakes to reviews, not just diffs — and merges nothing they haven't read.
 
-**Use when** the queue is already triaged and the repo has a green, runnable check suite. **Don't use** to triage (that's `triage`), to ship one attended slice with the human in the loop (that's `ship-next`), to explore an unscoped idea, or on a repo where you can't run tests locally — a sweep with no verification just manufactures branches.
+**Use when** the queue is already triaged and the repo has a green, runnable check suite. **Don't use** to triage (that's `triage`), to ship one attended slice with the human in the loop, to explore an unscoped idea, or on a repo where you can't run tests locally — a sweep with no verification just manufactures branches.
 
 ## Reference
 
