@@ -1,5 +1,0 @@
-interface:
-  display_name: "Issue Sweep"
-  short_description: "Sweep triaged issues into reviewed draft PRs"
-policy:
-  allow_implicit_invocation: false
