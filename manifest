@@ -7,6 +7,7 @@ home/.agents/rules/prudence.md	~/.agents/rules/prudence.md
 home/.agents/rules/workflow.md	~/.agents/rules/workflow.md
 home/.agents/skills/.gitignore	~/.agents/skills/.gitignore
 home/.agents/skills/.keep	~/.agents/skills/.keep
+home/.agents/skills/address-pr-feedback/SKILL.md	~/.agents/skills/address-pr-feedback/SKILL.md
 home/.agents/skills/code-review-register/SKILL.md	~/.agents/skills/code-review-register/SKILL.md
 home/.agents/skills/code-review/SKILL.md	~/.agents/skills/code-review/SKILL.md
 home/.agents/skills/code-review/agents/openai.yaml	~/.agents/skills/code-review/agents/openai.yaml
