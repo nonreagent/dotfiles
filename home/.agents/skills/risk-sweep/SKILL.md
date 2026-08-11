@@ -30,7 +30,14 @@ audit; it does not redefine it.
 ## Reference
 
 - [references/stage-prompts.md](references/stage-prompts.md) — the harness contract,
-  per-stage dispatch recipes, and output schemas.
+  per-stage dispatch recipes, and output schemas. Canonical: on any conflict with the
+  script below, this prose wins.
+- [scripts/workflow.js](scripts/workflow.js) — a ready-to-run implementation of the
+  pipeline for a Workflow-style harness. Recon still happens first, in the
+  orchestrator; its findings are the script's `args` (repo, default branch, posting
+  account, audit-skill path, shared context block, and the queue with **full** head
+  SHAs). Run this rather than re-deriving a script from the prose — and fold any fix
+  it needs back into the file, so it survives the machine.
 
 ## The pipeline
 

@@ -1,6 +1,8 @@
 # Stage prompts and output schemas
 
 Recipes, not templates. Each stage's dispatch prompt contains the listed parts, in order.
+(`../scripts/workflow.js` materializes these recipes for a Workflow-style harness; this
+prose stays canonical, and a divergence between the two is a bug in the script.)
 
 Everything recon learned goes in a **shared context block** reused by every prompt: repo
 path, default branch, the posting account (`gh api user -q .login` — comment lookups and
