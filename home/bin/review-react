@@ -41,8 +41,20 @@ gh pr checkout "$pr" >/dev/null 2>&1 || {
   git checkout --quiet FETCH_HEAD
 }
 
-if "${cmd[@]}" 2>&1 | tee -a "$log"; then
+"${cmd[@]}" 2>&1 | tee -a "$log" || {
+  echo "review-react: reaction on $owner/$repo#$pr failed or timed out; leaving unseen for retry" >&2
+  exit 0
+}
+
+# The merge never rides on agent judgment: an agent once launched rw-merge in the
+# background and exited "done" — the session teardown killed the merge, and the
+# already-marked-seen review meant the watcher never came back. The agent's job ends
+# at "branch current and pushed"; the harness owns the merge, and an APPROVED review
+# is only seen once rw-merge itself reports success.
+if [ "$state" != "APPROVED" ]; then
+  rw_mark_seen "$owner" "$repo" "$pr" "$review_id"
+elif "$HERE/rw-merge" "$owner" "$repo" "$pr" 2>&1 | tee -a "$log"; then
   rw_mark_seen "$owner" "$repo" "$pr" "$review_id"
 else
-  echo "review-react: reaction on $owner/$repo#$pr failed or timed out; leaving unseen for retry" >&2
+  echo "review-react: rw-merge did not merge $owner/$repo#$pr; leaving unseen for retry" >&2
 fi
