@@ -1,0 +1,5 @@
+interface:
+  display_name: "Risk Sweep"
+  short_description: "Label review risk across all open PRs in one run"
+policy:
+  allow_implicit_invocation: false

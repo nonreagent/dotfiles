@@ -1,0 +1,5 @@
+interface:
+  display_name: "Risk Audit"
+  short_description: "Price the human review attention one PR needs"
+policy:
+  allow_implicit_invocation: false

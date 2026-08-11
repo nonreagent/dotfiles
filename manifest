@@ -53,6 +53,11 @@ home/.agents/skills/research/SKILL.md	~/.agents/skills/research/SKILL.md
 home/.agents/skills/research/agents/openai.yaml	~/.agents/skills/research/agents/openai.yaml
 home/.agents/skills/resolving-merge-conflicts/SKILL.md	~/.agents/skills/resolving-merge-conflicts/SKILL.md
 home/.agents/skills/resolving-merge-conflicts/agents/openai.yaml	~/.agents/skills/resolving-merge-conflicts/agents/openai.yaml
+home/.agents/skills/risk-audit/SKILL.md	~/.agents/skills/risk-audit/SKILL.md
+home/.agents/skills/risk-audit/agents/openai.yaml	~/.agents/skills/risk-audit/agents/openai.yaml
+home/.agents/skills/risk-sweep/SKILL.md	~/.agents/skills/risk-sweep/SKILL.md
+home/.agents/skills/risk-sweep/agents/openai.yaml	~/.agents/skills/risk-sweep/agents/openai.yaml
+home/.agents/skills/risk-sweep/references/stage-prompts.md	~/.agents/skills/risk-sweep/references/stage-prompts.md
 home/.agents/skills/setup-matt-pocock-skills/SKILL.md	~/.agents/skills/setup-matt-pocock-skills/SKILL.md
 home/.agents/skills/setup-matt-pocock-skills/agents/openai.yaml	~/.agents/skills/setup-matt-pocock-skills/agents/openai.yaml
 home/.agents/skills/setup-matt-pocock-skills/domain.md	~/.agents/skills/setup-matt-pocock-skills/domain.md
