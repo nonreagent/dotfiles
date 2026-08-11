@@ -196,6 +196,69 @@ STUB
   [ "$out" = "READY" ]
 }
 
+# --- review-react end to end (stubbed externals) -------------------------------
+# Runs the real script with gh/claude stubbed on PATH. The gh stub serves
+# $GH_PR_VIEW_JSON for `pr view` (rw-merge's readiness probe) and records a
+# `pr merge` call as $RW_HOME/merged-marker.
+
+RR_BIN="$(mktemp -d)"
+cat > "$RR_BIN/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "repo clone") mkdir -p "$4/.git" ;;
+  "pr view")    printf '%s\n' "$GH_PR_VIEW_JSON" ;;
+  "pr merge")   : > "$RW_HOME/merged-marker" ;;
+esac
+exit 0
+STUB
+cat > "$RR_BIN/claude" <<'STUB'
+#!/usr/bin/env bash
+echo agent-ok
+STUB
+chmod +x "$RR_BIN/gh" "$RR_BIN/claude"
+
+rr_invoke() { # rw_home review_state — react to review REV_1 on myrepo#131
+  printf 'playbook for {{REPO}}#{{PR}}\n' > "$1/playbook.md"
+  # An absent config makes rw_load_config return 1, killing the set -e script;
+  # in production setup-review-watcher guarantees one exists.
+  : > "$1/config"
+  RW_HOME="$1" PATH="$RR_BIN:$PATH" GH_PR_VIEW_JSON="$GH_PR_VIEW_JSON" \
+    "$REPO/overlay/bin/review-react" nonrational myrepo 131 REV_1 "$2" nonrational \
+    >/dev/null 2>&1
+}
+RR_GREEN='{"reviewDecision":"APPROVED","mergeable":"MERGEABLE","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}]}'
+RR_RED='{"reviewDecision":"APPROVED","mergeable":"MERGEABLE","statusCheckRollup":[{"status":"COMPLETED","conclusion":"FAILURE"}]}'
+
+test_react_approved_merges_then_marks_seen() {
+  local home; home="$(mktemp -d)"
+  GH_PR_VIEW_JSON="$RR_GREEN" rr_invoke "$home" APPROVED
+  local ok=0
+  [ -f "$home/merged-marker" ] \
+    && [ "$(cat "$home/state/nonrational__myrepo__131.seen" 2>/dev/null)" = "REV_1" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_react_approved_unmergeable_stays_unseen() {
+  local home; home="$(mktemp -d)"
+  GH_PR_VIEW_JSON="$RR_RED" rr_invoke "$home" APPROVED
+  local ok=0
+  [ ! -f "$home/merged-marker" ] \
+    && [ ! -f "$home/state/nonrational__myrepo__131.seen" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_react_changes_requested_marks_seen_without_merging() {
+  local home; home="$(mktemp -d)"
+  GH_PR_VIEW_JSON="$RR_GREEN" rr_invoke "$home" CHANGES_REQUESTED
+  local ok=0
+  [ ! -f "$home/merged-marker" ] \
+    && [ "$(cat "$home/state/nonrational__myrepo__131.seen" 2>/dev/null)" = "REV_1" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
@@ -215,5 +278,9 @@ check test_merge_ready_conflicting_is_not_ready
 check test_merge_ready_red_check_is_not_ready
 check test_merge_ready_in_progress_is_pending
 check test_merge_ready_empty_rollup_is_ready
+check test_react_approved_merges_then_marks_seen
+check test_react_approved_unmergeable_stays_unseen
+check test_react_changes_requested_marks_seen_without_merging
+rm -rf "$RR_BIN"
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]
