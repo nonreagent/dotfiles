@@ -69,7 +69,10 @@ The orchestrator does this itself, read-only, in the main checkout.
    against the live label list, and both risk labels must exist, else stop and say
    so**; the repo's hotspot paths from the mapping doc, or one derivation pass from
    the repo's docs, done once and passed to every assessor.
-2. **The queue, snapshotted.** Open, non-draft PRs with head SHA, existing risk labels,
+2. **The queue, snapshotted.** Open, non-draft PRs with the **full** `headRefOid` —
+   never truncate it in the snapshot; the stages equality-check it, and a re-derived or
+   padded SHA sends every item to `skipped-stale` (only the map's stamp is short) —
+   plus existing risk labels,
    and each PR's existing review-map SHA (parse `assessed at` from the map comment —
    a short SHA, prefix-matched against `headRefOid`). **Skip a PR only when its map
    matches the current head *and* its labels carry exactly one risk role agreeing with
