@@ -58,6 +58,7 @@ home/.agents/skills/risk-audit/agents/openai.yaml	~/.agents/skills/risk-audit/ag
 home/.agents/skills/risk-sweep/SKILL.md	~/.agents/skills/risk-sweep/SKILL.md
 home/.agents/skills/risk-sweep/agents/openai.yaml	~/.agents/skills/risk-sweep/agents/openai.yaml
 home/.agents/skills/risk-sweep/references/stage-prompts.md	~/.agents/skills/risk-sweep/references/stage-prompts.md
+home/.agents/skills/risk-sweep/scripts/workflow.js	~/.agents/skills/risk-sweep/scripts/workflow.js
 home/.agents/skills/setup-matt-pocock-skills/SKILL.md	~/.agents/skills/setup-matt-pocock-skills/SKILL.md
 home/.agents/skills/setup-matt-pocock-skills/agents/openai.yaml	~/.agents/skills/setup-matt-pocock-skills/agents/openai.yaml
 home/.agents/skills/setup-matt-pocock-skills/domain.md	~/.agents/skills/setup-matt-pocock-skills/domain.md
