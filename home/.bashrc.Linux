@@ -75,6 +75,19 @@ source_if_exists "/usr/share/autojump/autojump.sh"
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
+# fzf takes over ctrl+r (history), ctrl+t (paths) and alt+c (cd), plus the
+# **<TAB> completion trigger. `fzf --bash` emits all of it in one shot, but only
+# since fzf 0.48 — Debian ships 0.44, which keeps the same snippets on disk. The
+# guard skips both when the ~/.fzf.bash hook above already loaded them.
+if ! declare -F __fzf_history__ > /dev/null && command -v fzf > /dev/null; then
+  if fzf --bash > /dev/null 2>&1; then
+    eval "$(fzf --bash)"
+  else
+    source_if_exists /usr/share/doc/fzf/examples/key-bindings.bash
+    source_if_exists /usr/share/bash-completion/completions/fzf
+  fi
+fi
+
 # Auto-attach tmux on interactive SSH logins. `exec` means detaching from tmux
 # also ends the SSH session. The $- guard matters: this bashrc has no
 # non-interactive early return, and sshd-invoked bash sources it for remote
