@@ -103,6 +103,7 @@ home/.claude/plugins/marketplaces/.keep	~/.claude/plugins/marketplaces/.keep
 home/.claude/rules	~/.claude/rules
 home/.claude/settings.json	~/.claude/settings.json
 home/.claude/skills	~/.claude/skills
+home/.claude/statusline.sh	~/.claude/statusline.sh
 home/.claude/sync-plugins.sh	~/.claude/sync-plugins.sh
 home/.gemini/antigravity-cli/skills	~/.gemini/antigravity-cli/skills
 home/.gitconfig	~/.gitconfig

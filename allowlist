@@ -53,6 +53,7 @@ home/.agents/skills
 # so 1b keeps them verbatim rather than deref'ing upstream's wider set.
 home/.claude/rules
 home/.claude/settings.json
+home/.claude/statusline.sh
 home/.claude/sync-plugins.sh
 home/.claude/skills
 home/.claude/agents
