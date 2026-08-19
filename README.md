@@ -9,7 +9,8 @@ an agent-identity overlay.
 - `allowlist` (hand-edited — the selection layer) names which upstream paths the
   agent gets; `build.sh` reads each path's target + OS condition from
   `nonrational/dotfiles`'s `manifest` (the placement layer) and materializes it
-  into `home/`.
+  into `home/`. A `!path` line subtracts that path from the selection
+  (gitignore-style, but exclusions always win — no re-inclusion).
 - `build.sh` clones [`nonrational/dotfiles`](https://github.com/nonrational/dotfiles)
   fresh from GitHub, copies that subset into the committed `home/` tree, and
   applies the `@nonreagent` overlay (git identity + `gh` auth, a macOS-free

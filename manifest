@@ -22,11 +22,6 @@ home/.agents/skills/domain-modeling/ADR-FORMAT.md	~/.agents/skills/domain-modeli
 home/.agents/skills/domain-modeling/CONTEXT-FORMAT.md	~/.agents/skills/domain-modeling/CONTEXT-FORMAT.md
 home/.agents/skills/domain-modeling/SKILL.md	~/.agents/skills/domain-modeling/SKILL.md
 home/.agents/skills/domain-modeling/agents/openai.yaml	~/.agents/skills/domain-modeling/agents/openai.yaml
-home/.agents/skills/find-inspiration/SKILL.md	~/.agents/skills/find-inspiration/SKILL.md
-home/.agents/skills/find-inspiration/bin/triage-issues.py	~/.agents/skills/find-inspiration/bin/triage-issues.py
-home/.agents/skills/find-inspiration/decisions.jsonl	~/.agents/skills/find-inspiration/decisions.jsonl
-home/.agents/skills/find-inspiration/runs/2026-07-04-priors.json	~/.agents/skills/find-inspiration/runs/2026-07-04-priors.json
-home/.agents/skills/find-inspiration/runs/2026-08-19-samandmoore.json	~/.agents/skills/find-inspiration/runs/2026-08-19-samandmoore.json
 home/.agents/skills/grill-me/SKILL.md	~/.agents/skills/grill-me/SKILL.md
 home/.agents/skills/grill-me/agents/openai.yaml	~/.agents/skills/grill-me/agents/openai.yaml
 home/.agents/skills/grill-with-docs/SKILL.md	~/.agents/skills/grill-with-docs/SKILL.md

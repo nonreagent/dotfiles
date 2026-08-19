@@ -74,10 +74,38 @@ home_rel() {
   esac
 }
 
-symsrc=(); symdst=()                                    # symlinks, deferred to 1b
+# Split the allowlist into selections and '!'-prefixed exclusions. Exclusions
+# subtract from whatever the selections pull in, regardless of order — no
+# gitignore-style re-inclusion, the list is small enough to stay unambiguous.
+sel=(); excl=()
 while IFS= read -r entry || [ -n "$entry" ]; do
   entry="${entry%%#*}"; entry="$(echo "$entry" | xargs)"
   [ -z "$entry" ] && continue
+  case "$entry" in
+    "!"*) e="${entry#!}"; excl+=("${e%/}") ;;          # tolerate gitignore-style trailing slash
+    *)    sel+=("$entry") ;;
+  esac
+done < "$REPO/allowlist"
+[ "${#sel[@]}" -gt 0 ] || { echo "error: allowlist selects nothing" >&2; exit 1; }
+
+# Path itself or under it — the same prefix test resolve_row uses. Records which
+# exclusions fired so a stale/typo'd '!' entry fails the build below.
+exclhit=()
+excluded() {
+  local path="$1" i e
+  [ "${#excl[@]}" -gt 0 ] || return 1
+  for i in "${!excl[@]}"; do
+    e="${excl[$i]}"
+    if [ "$path" = "$e" ] || [ "${path#"$e"/}" != "$path" ]; then
+      exclhit[$i]=1
+      return 0
+    fi
+  done
+  return 1
+}
+
+symsrc=(); symdst=()                                    # symlinks, deferred to 1b
+for entry in "${sel[@]}"; do
   idx="$(resolve_row "$entry")"
   [ -n "$idx" ] || { echo "error: allowlist '$entry': no upstream manifest row places it" >&2; exit 1; }
   cond="${mcond[$idx]}"
@@ -91,6 +119,7 @@ while IFS= read -r entry || [ -n "$entry" ]; do
   n=0
   while IFS= read -r -d '' f; do
     mode="${f%% *}"; P="${f#*$'\t'}"                    # `ls-files -s` => "<mode> <sha> <stage>\t<path>"
+    excluded "$P" && continue
     Prel="${P#"$S"/}"; [ "$Prel" = "$P" ] && Prel=""    # P == S (single-file source)
     dst="$OUT/$relbase${Prel:+/$Prel}"
     mkdir -p "$(dirname "$dst")"
@@ -102,7 +131,16 @@ while IFS= read -r entry || [ -n "$entry" ]; do
     n=$((n + 1))
   done < <(git -C "$DOTFILES" ls-files -s -z -- "$entry")
   [ "$n" -gt 0 ] || { echo "error: no tracked files for allowlist path: $entry" >&2; exit 1; }
-done < "$REPO/allowlist"
+done
+
+# An exclusion that removed nothing is a typo or went stale upstream — fail loudly
+# rather than let it linger as dead config.
+if [ "${#excl[@]}" -gt 0 ]; then
+  for i in "${!excl[@]}"; do
+    [ "${exclhit[$i]:-0}" = "1" ] \
+      || { echo "error: allowlist '!${excl[$i]}' excluded nothing" >&2; exit 1; }
+  done
+fi
 
 # 1b. Symlinks, settled once every regular file has landed. Upstream's links are
 #     relative and its home/ mirrors ~/ exactly as ours does, so a link whose
@@ -115,12 +153,28 @@ done < "$REPO/allowlist"
 #     The -e test assumes a kept link never points at another deferred link;
 #     upstream has no such chains, and one would simply be materialized instead.
 if [ "${#symsrc[@]}" -gt 0 ]; then
+  dotfiles_abs="$(cd "$DOTFILES" && pwd -P)"
   for i in "${!symsrc[@]}"; do
     dst="${symdst[$i]}"
     link="$(readlink "$DOTFILES/${symsrc[$i]}")"
     if [ -e "$(dirname "$dst")/$link" ]; then
       ln -s "$link" "$dst"
     else
+      # The deref below resolves against the UPSTREAM clone, which still holds
+      # everything the allowlist excluded — a link into an excluded subtree would
+      # silently un-exclude its target (and the "excluded nothing" guard can't
+      # see it). Resolve the target upstream and refuse: the allowlist is
+      # contradictory, and only the human can say which side wins.
+      tdir="$(cd "$(dirname "$DOTFILES/${symsrc[$i]}")" 2>/dev/null \
+              && cd "$(dirname "$link")" 2>/dev/null && pwd -P || true)"
+      case "$tdir" in
+        "$dotfiles_abs" | "$dotfiles_abs"/*)
+          rel="${tdir#"$dotfiles_abs"}"; rel="${rel#/}"
+          if excluded "${rel:+$rel/}$(basename "$link")"; then
+            echo "error: symlink ${symsrc[$i]} -> $link resolves into an excluded path; exclude the link too or drop the exclusion" >&2
+            exit 1
+          fi ;;
+      esac
       cp -RL "$DOTFILES/${symsrc[$i]}" "$dst"
     fi
   done

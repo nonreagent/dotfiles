@@ -79,6 +79,33 @@ test_allowlist_resolves() {
   [ -f "$REPO/home/.agents/rules/language.md" ] || { echo "  .agents subpath missing" >&2; return 1; }
   # a Darwin fragment must NOT be vendored even if it sneaks into the allowlist:
   [ ! -e "$REPO/home/.bashrc.Darwin" ] || { echo "  Darwin fragment leaked" >&2; return 1; }
+  # a '!'-excluded sub-path must NOT be vendored:
+  [ ! -e "$REPO/home/.agents/skills/find-inspiration" ] || { echo "  excluded skill leaked" >&2; return 1; }
+}
+
+# build.sh step 1b must refuse to deref a symlink whose target the allowlist
+# excludes — the deref resolves against the upstream clone and would silently
+# un-exclude the target. Synthetic upstream: 'kept/link' points into 'banned/',
+# which the exclusion removes; the build must die in 1b with the guard's message.
+test_excluded_symlink_guard() {
+  local tmp; tmp="$(mktemp -d)"
+  local up="$tmp/upstream" repo="$tmp/repo"
+  mkdir -p "$up/home/.agents/skills/banned" "$up/home/.agents/skills/kept" "$repo"
+  echo secret > "$up/home/.agents/skills/banned/secret.txt"
+  ln -s ../banned/secret.txt "$up/home/.agents/skills/kept/link"
+  printf 'home/.agents/skills\t~/.agents/skills\n' > "$up/manifest"
+  git -C "$up" init -q && git -C "$up" add -A \
+    && git -C "$up" -c user.email=t@t -c user.name=t commit -qm x \
+    || { rm -rf "$tmp"; return 1; }
+  cp "$REPO/build.sh" "$repo/build.sh"   # guard fires in 1b, before overlay/tests are needed
+  printf 'home/.agents/skills\n!home/.agents/skills/banned\n' > "$repo/allowlist"
+  local rc=0
+  DOTFILES="$up" "$repo/build.sh" >/dev/null 2>"$tmp/err" || rc=$?
+  local msg; msg="$(cat "$tmp/err")"
+  rm -rf "$tmp"
+  [ "$rc" -ne 0 ] || { echo "  build succeeded despite excluded symlink target" >&2; return 1; }
+  printf '%s' "$msg" | grep -q "resolves into an excluded path" \
+    || { echo "  build failed for the wrong reason: $msg" >&2; return 1; }
 }
 
 # build.sh step 1b, both branches. The kept-link case guards a silent leak: a link
@@ -139,6 +166,7 @@ check test_base_preserved
 check test_orphan_pruned
 check test_review_watcher_units
 check test_allowlist_resolves
+check test_excluded_symlink_guard
 check test_symlink_policy
 check test_manifest_covers_home
 check test_deploy_apply

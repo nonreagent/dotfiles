@@ -1,10 +1,12 @@
 # Selection layer: which upstream paths the @nonreagent agent gets. One path per
-# line; '#' starts a comment. Each entry is a path as it appears in
-# nonrational/dotfiles — upstream keeps its dotfiles under home/, so entries carry
-# that prefix and match its `manifest` (the placement layer) 1:1. build.sh reads
-# the target + condition from there. Identity-bearing / transformed files
-# (.gitconfig, .claude/CLAUDE.md) are NOT here; build.sh's transformation layer
-# writes them.
+# line; '#' starts a comment. A '!path' line excludes that path (and everything
+# under it) from whatever the other entries select — exclusions win regardless of
+# order, and one that excludes nothing fails the build. Each entry is a path as it
+# appears in nonrational/dotfiles — upstream keeps its dotfiles under home/, so
+# entries carry that prefix and match its `manifest` (the placement layer) 1:1.
+# build.sh reads the target + condition from there. Identity-bearing /
+# transformed files (.gitconfig, .claude/CLAUDE.md) are NOT here; build.sh's
+# transformation layer writes them.
 
 # bin (resolves to the upstream `home/bin.Linux ~/bin os=Linux` row -> home/bin)
 home/bin.Linux
@@ -42,7 +44,9 @@ home/.agents/rules/prudence.md
 
 # skills are taken wholesale; their per-skill links into the ext/ submodule
 # escape the vendored tree, so 1b materializes them (agent stays self-contained).
+# find-inspiration is the human's manual curation loop, not an agent tool.
 home/.agents/skills
+!home/.agents/skills/find-inspiration
 
 # claude (CLAUDE.md comes from the overlay). rules/ and skills/ are upstream
 # shims into .agents/ — both resolve inside home/ now that .agents is vendored,
