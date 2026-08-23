@@ -97,6 +97,8 @@ home/.claude/commands/then.md	~/.claude/commands/then.md
 home/.claude/exe.md	~/.claude/exe.md
 home/.claude/hooks/.keep	~/.claude/hooks/.keep
 home/.claude/hooks/record-session-cost.sh	~/.claude/hooks/record-session-cost.sh
+home/.claude/hooks/record-turn-end.sh	~/.claude/hooks/record-turn-end.sh
+home/.claude/hooks/ring-tmux-bell.sh	~/.claude/hooks/ring-tmux-bell.sh
 home/.claude/identity.md	~/.claude/identity.md
 home/.claude/output-styles/.keep	~/.claude/output-styles/.keep
 home/.claude/plugins/.keep	~/.claude/plugins/.keep
