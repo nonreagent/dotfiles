@@ -1,0 +1,1 @@
+- **Assign the issue to yourself when picking it up.** The moment you start working an issue, `gh issue edit <n> --add-assignee <agent-account>` — before brainstorming or branching, not after the PR opens. Check assignees first; someone already assigned means ask before taking it.

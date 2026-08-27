@@ -46,3 +46,5 @@ For multi-step tasks, state a brief plan:
 - **Don't escape backticks in quoted heredocs.** When writing PR / issue / comment bodies via `gh … --body "$(cat <<'EOF' … EOF)"`, write backticks raw. The `'EOF'` quoting disables shell expansion, so `\`` survives literally and GitHub renders the backslash.
 - **Don't pass `--delete-branch` to `gh pr merge`** when the repo has auto-delete enabled. The synchronous delete races with GitHub's auto-retarget of stacked dependent PRs and can auto-close the next PR in the stack instead of retargeting it. Let the repo's auto-delete handle cleanup.
 - **Verify review follow-ups against the same interface.** Before saying a follow-up change addresses review feedback, confirm it changes the same public surface. A GraphQL path does not cover an equivalent REST path, and vice versa.
+
+- **Assign the issue to yourself when picking it up.** The moment you start working an issue, `gh issue edit <n> --add-assignee <agent-account>` — before brainstorming or branching, not after the PR opens. Check assignees first; someone already assigned means ask before taking it.
