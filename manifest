@@ -8,6 +8,10 @@ home/.agents/rules/workflow.md	~/.agents/rules/workflow.md
 home/.agents/skills/.gitignore	~/.agents/skills/.gitignore
 home/.agents/skills/.keep	~/.agents/skills/.keep
 home/.agents/skills/address-pr-feedback/SKILL.md	~/.agents/skills/address-pr-feedback/SKILL.md
+home/.agents/skills/atomic-commits/SKILL.md	~/.agents/skills/atomic-commits/SKILL.md
+home/.agents/skills/code-comment-register/SKILL.md	~/.agents/skills/code-comment-register/SKILL.md
+home/.agents/skills/code-comment-register/evals.json	~/.agents/skills/code-comment-register/evals.json
+home/.agents/skills/code-comment-register/run-evals.mjs	~/.agents/skills/code-comment-register/run-evals.mjs
 home/.agents/skills/code-review-register/SKILL.md	~/.agents/skills/code-review-register/SKILL.md
 home/.agents/skills/code-review/SKILL.md	~/.agents/skills/code-review/SKILL.md
 home/.agents/skills/code-review/agents/openai.yaml	~/.agents/skills/code-review/agents/openai.yaml
@@ -96,6 +100,7 @@ home/.claude/commands/par.md	~/.claude/commands/par.md
 home/.claude/commands/then.md	~/.claude/commands/then.md
 home/.claude/exe.md	~/.claude/exe.md
 home/.claude/hooks/.keep	~/.claude/hooks/.keep
+home/.claude/hooks/op-sync-usage.sh	~/.claude/hooks/op-sync-usage.sh
 home/.claude/hooks/record-session-cost.sh	~/.claude/hooks/record-session-cost.sh
 home/.claude/hooks/record-turn-end.sh	~/.claude/hooks/record-turn-end.sh
 home/.claude/hooks/ring-tmux-bell.sh	~/.claude/hooks/ring-tmux-bell.sh
