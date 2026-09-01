@@ -243,6 +243,12 @@ perl -pi -e 's/^BASH_REPORT_MISSING=true\b/BASH_REPORT_MISSING=false/' "$OUT/.ba
 cp "$DOTFILES/deploy.sh" "$REPO/deploy.sh"
 chmod +x "$REPO/deploy.sh"
 
+# deploy.sh sources scripts/host-id.sh directly (it lives outside home/, so the
+# manifest/allowlist machinery above never sees it) — vendor it alongside
+# deploy.sh, or the VM's shell rc files and deploy.sh itself fail to source it.
+mkdir -p "$REPO/scripts"
+cp "$DOTFILES/scripts/host-id.sh" "$REPO/scripts/host-id.sh"
+
 # deploy.sh and install.sh both whitespace-split the generated manifest, so a
 # home/ path containing a space/tab would silently mis-split. Fail loudly here.
 if ( cd "$OUT" && find . \( -type f -o -type l \) ) | grep -q '[[:space:]]'; then
