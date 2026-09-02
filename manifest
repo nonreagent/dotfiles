@@ -40,6 +40,7 @@ home/.agents/skills/improve-codebase-architecture/agents/openai.yaml	~/.agents/s
 home/.agents/skills/issue-sweep/SKILL.md	~/.agents/skills/issue-sweep/SKILL.md
 home/.agents/skills/issue-sweep/agents/openai.yaml	~/.agents/skills/issue-sweep/agents/openai.yaml
 home/.agents/skills/issue-sweep/references/stage-prompts.md	~/.agents/skills/issue-sweep/references/stage-prompts.md
+home/.agents/skills/issue-sweep/scripts/workflow.js	~/.agents/skills/issue-sweep/scripts/workflow.js
 home/.agents/skills/prose-register/SKILL.md	~/.agents/skills/prose-register/SKILL.md
 home/.agents/skills/prose-register/evals-handoff-changed-my-mind.md	~/.agents/skills/prose-register/evals-handoff-changed-my-mind.md
 home/.agents/skills/prose-register/evals-handoff.md	~/.agents/skills/prose-register/evals-handoff.md
