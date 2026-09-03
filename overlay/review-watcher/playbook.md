@@ -10,6 +10,18 @@ Ground rules (non-negotiable):
 - Iterate on THIS PR's branch. Never open a new PR.
 - If the right action is unclear, needs a product decision, or would break the rules, do NOT
   guess: post a short clarifying comment, then exit without pushing or merging.
+- This checkout is shared with concurrent watcher sessions, and another one can switch its
+  branch underneath you. Pin the PR head first (`gh pr view {{PR}} --json headRefOid`) and
+  describe the PR from that SHA (`git diff --stat <base>...<sha>`), never from a HEAD-relative
+  range. A surprising file list is a suspected branch switch (`git reflog` shows a checkout you
+  did not make), not a finding.
+- The dispatch is not evidence the PR is still open; the human may have merged it seconds after
+  approving. First call of the session:
+  `gh api "repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/pulls/{{PR}}" --jq '{state, merged, merged_at}'`
+  (REST; GraphQL serves a stale OPEN for minutes). If `merged` is true the work is on main
+  (`git show --stat <merge_commit_sha>` from that same call shows it); exit without pushing,
+  commenting, or re-requesting review. If you already pushed to a merged PR's branch,
+  `git push origin --delete <branch>` restores the auto-delete state.
 
 If the review state is CHANGES_REQUESTED:
 1. Read the PR (title, body, diff), the review body AND its inline comments, and the linked issue.
