@@ -71,6 +71,8 @@ test_orphan_pruned() {
 
 test_review_watcher_units() { bash "$REPO/test/review-watcher.test.sh" >/dev/null; }
 
+test_clipboard_shim_units() { bash "$REPO/test/clipboard-shim.test.sh" >/dev/null; }
+
 test_allowlist_resolves() {
   "$REPO/build.sh" >/dev/null || return 1
   # bin.Linux resolved to the manifest's ~/bin target (special case gone):
@@ -165,6 +167,7 @@ check test_identity
 check test_base_preserved
 check test_orphan_pruned
 check test_review_watcher_units
+check test_clipboard_shim_units
 check test_allowlist_resolves
 check test_excluded_symlink_guard
 check test_symlink_policy

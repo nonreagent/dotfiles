@@ -231,3 +231,4 @@ home/bin/review-watcher-lib.sh	~/bin/review-watcher-lib.sh
 home/bin/rw-merge	~/bin/rw-merge
 home/bin/setup-review-watcher	~/bin/setup-review-watcher
 home/bin/try	~/bin/try
+home/bin/wl-paste	~/bin/wl-paste
