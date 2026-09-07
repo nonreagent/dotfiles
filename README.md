@@ -61,6 +61,10 @@ Observe: `journalctl -u review-watcher -f` · attach reactions: `tmux -S ~/.revi
 Pause: `touch ~/.review-watcher/PAUSED` or `sudo systemctl stop review-watcher`.
 Design + plan: `docs/superpowers/specs/2026-07-08-review-watcher-design.md`, `docs/superpowers/plans/2026-07-08-review-watcher.md`.
 
+### Clipboard bridge
+
+`~/bin/wl-paste` is a shim, not Wayland. Claude Code on Linux falls back to `wl-paste` for ctrl+v image paste once `xclip` fails without a display; the shim answers by fetching the image from the mac over `127.0.0.1:2224`, a port the mac's ssh config reverse-forwards into every `*.exe.xyz` session. Nothing runs between pastes and only images cross. The mac half (launch agent, ssh include) lives in `nonrational/dotfiles`. Design: `docs/superpowers/specs/2026-09-07-clipboard-bridge-design.md`, plan: `docs/superpowers/plans/2026-09-07-clipboard-bridge.md`.
+
 ## Sync
 
 - **Source edits:** push to `nonrational/dotfiles`, then `./build.sh` here picks
