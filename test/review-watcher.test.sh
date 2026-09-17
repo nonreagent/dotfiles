@@ -61,6 +61,39 @@ test_classify_trusted_states() {
   && [ "$(rw_classify nonrational DISMISSED false nonreagent)" = "SKIP" ]
 }
 
+# The gate is `claude auth status`: a failed token refresh blanks the stored
+# tokens, so it reports logged out from the first failed reaction onward.
+test_logged_in_reads_auth_status() {
+  local bin ok=0; bin="$(mktemp -d)"
+  cat > "$bin/claude" <<'STUB'
+#!/usr/bin/env bash
+if [ "${CLAUDE_STUB_LOGGED_IN:-}" = 1 ]; then
+  echo '{"loggedIn":true,"authMethod":"claude.ai"}'; exit 0
+fi
+echo '{"loggedIn":false,"authMethod":"none"}'; exit 1
+STUB
+  chmod +x "$bin/claude"
+  CLAUDE_STUB_LOGGED_IN=1 PATH="$bin:$PATH" rw_logged_in \
+    && ! CLAUDE_STUB_LOGGED_IN=0 PATH="$bin:$PATH" rw_logged_in && ok=1
+  rm -rf "$bin"
+  [ "$ok" = 1 ]
+}
+
+# `claude auth status` opens a network connection, and the gate runs inline in the
+# poll loop: a stall there would freeze every PR, so it must be bounded.
+test_logged_in_bounded_by_timeout() {
+  local bin ok=0 start elapsed; bin="$(mktemp -d)"
+  printf '#!/usr/bin/env bash\nsleep 30\n' > "$bin/claude"
+  chmod +x "$bin/claude"
+  start="$(date +%s)"
+  RW_AUTH_TIMEOUT=1 PATH="$bin:$PATH" rw_logged_in
+  local rc=$?
+  elapsed=$(( $(date +%s) - start ))
+  [ "$rc" != 0 ] && [ "$elapsed" -lt 10 ] && ok=1
+  rm -rf "$bin"
+  [ "$ok" = 1 ]
+}
+
 test_session_name_is_repo_qualified() {
   [ "$(rw_session_name nonrational myrepo 131)" = "myrepo-pr-131" ]
 }
@@ -259,6 +292,35 @@ test_react_changes_requested_marks_seen_without_merging() {
   [ "$ok" = 1 ]
 }
 
+test_watcher_holds_reactions_while_logged_out() {
+  local home bin err ok=0
+  home="$(mktemp -d)"; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  search) echo '[{"repository":{"nameWithOwner":"nonrational/myrepo"},"number":131,"isDraft":false,"author":{"login":"nonreagent"}}]' ;;
+  api)    echo '[{"id":7,"state":"APPROVED","user":{"login":"nonrational"},"submitted_at":"2026-07-02T00:00:00Z"}]' ;;
+esac
+STUB
+  cat > "$bin/tmux" <<'STUB'
+#!/usr/bin/env bash
+case "$3" in                     # argv: -S <sock> <command> ...
+  has-session) exit 1 ;;
+  new-session) : > "$RW_HOME/new-session-marker" ;;
+esac
+STUB
+  cat > "$bin/claude" <<'STUB'
+#!/usr/bin/env bash
+echo '{"loggedIn":false,"authMethod":"none"}'; exit 1
+STUB
+  chmod +x "$bin/gh" "$bin/tmux" "$bin/claude"
+  : > "$home/config"
+  err="$(RW_HOME="$home" PATH="$bin:$PATH" "$REPO/overlay/bin/review-watcher" --once 2>&1 >/dev/null)"
+  grep -q 'claude auth login' <<<"$err" && [ ! -f "$home/new-session-marker" ] && ok=1
+  rm -rf "$home" "$bin"
+  [ "$ok" = 1 ]
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
@@ -268,6 +330,8 @@ check test_classify_untrusted_is_notify
 check test_classify_draft_is_skip
 check test_classify_self_review_is_skip
 check test_classify_trusted_states
+check test_logged_in_reads_auth_status
+check test_logged_in_bounded_by_timeout
 check test_session_name_is_repo_qualified
 check test_render_substitutes_placeholders
 check test_open_prs_parses_search
@@ -281,6 +345,7 @@ check test_merge_ready_empty_rollup_is_ready
 check test_react_approved_merges_then_marks_seen
 check test_react_approved_unmergeable_stays_unseen
 check test_react_changes_requested_marks_seen_without_merging
+check test_watcher_holds_reactions_while_logged_out
 rm -rf "$RR_BIN"
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]

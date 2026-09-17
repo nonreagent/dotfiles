@@ -17,6 +17,9 @@ rw_dispatch() { # owner repo pr review_id state reviewer classification
          >/dev/null 2>&1 || true
       rw_mark_seen "$owner" "$repo" "$pr" "$rid" ;;
     REACT_*)
+      if ! rw_logged_in; then
+        echo "claude auth unconfirmed (logged out, or \`claude auth status\` failed); run \`claude auth login\` as $(id -un). Holding $owner/$repo#$pr" >&2; return
+      fi
       if [ "$(rw_active_reactions)" -ge "$MAX_CONCURRENT" ]; then
         echo "at concurrency cap ($MAX_CONCURRENT); deferring $owner/$repo#$pr" >&2; return
       fi
