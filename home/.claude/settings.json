@@ -1,4 +1,5 @@
 {
+  "syncClaudeAiSkills": false,
   "attribution": {
     "pr": "",
     "sessionUrl": false
@@ -17,10 +18,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/record-turn-end.sh"
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/op-sync-usage.sh"
           },
           {
             "type": "command",
@@ -49,7 +46,7 @@
     "frontend-design@claude-plugins-official": false,
     "rust-analyzer-lsp@claude-plugins-official": false
   },
-  "effortLevel": "xhigh",
+  "effortLevel": "high",
   "tui": "fullscreen",
   "skipWorkflowUsageWarning": true,
   "theme": "dark",
