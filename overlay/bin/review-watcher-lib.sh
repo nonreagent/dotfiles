@@ -3,6 +3,7 @@
 
 : "${RW_HOME:=$HOME/.review-watcher}"
 : "${RW_BOT_LOGIN:=nonreagent}"
+: "${RW_AUTH_TIMEOUT:=10}"
 
 rw_load_config() {
   POLL_INTERVAL=45
@@ -25,6 +26,18 @@ rw_mark_seen() { # owner repo pr review_id
   local f; f="$(rw_seen_file "$1" "$2" "$3")"
   mkdir -p "$(dirname "$f")"
   printf '%s' "$4" > "$f"
+}
+
+# A reaction under an expired login burns a poll and reports nothing useful (the
+# reactor's stderr dies with its detached tmux session). The first such failure
+# blanks the stored tokens, so `claude auth status` reports logged out from then
+# on and the watcher can hold instead of retrying every poll.
+# Bounded: `claude auth status` makes a network call, and this runs inline in the
+# poll loop, so a stall here would freeze every PR. An unanswered check holds
+# reactions rather than dispatching one blind.
+rw_logged_in() {
+  timeout "$RW_AUTH_TIMEOUT" claude auth status 2>/dev/null \
+    | jq -e '.loggedIn == true' >/dev/null 2>&1
 }
 
 rw_in_allowlist() { # login "space separated list"

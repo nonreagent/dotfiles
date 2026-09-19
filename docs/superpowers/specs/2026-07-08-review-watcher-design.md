@@ -183,6 +183,7 @@ Enforced structurally in bash (the model cannot override):
 | Per-reaction timeout | A window running > `$REACTION_TIMEOUT` (default 25m) is killed + flagged |
 | Kill switch | `~/.review-watcher/PAUSED` flag **or** `systemctl stop review-watcher` halts dispatch |
 | Retry-safe (mark-seen-on-success) | Review id marked seen only after the reaction succeeds — a crash retries rather than drops (see State & dedup) |
+| Auth gate | Reactions dispatch only while `claude auth status` (bounded by `RW_AUTH_TIMEOUT`, default 10s) reports a login; an expired session — or an unanswered check — holds them with a journal line naming `claude auth login` |
 
 ### Permission mode
 
@@ -221,7 +222,10 @@ timeout "$REACTION_TIMEOUT" claude -p "$(render_playbook "$REPO" "$PR" "$REVIEW"
   `MAX_CONCURRENT` counting (`rw_session_name` → `<repo>-pr-<n>`) — it's just a plain headless
   process now, not an RC window.
 - Auth: the VM already has a claude.ai **Max** OAuth login; `claude -p` runs under the same
-  subscription, no API key / `ANTHROPIC_BASE_URL` needed. Token auto-refreshes.
+  subscription, no API key / `ANTHROPIC_BASE_URL` needed. Token auto-refreshes until the refresh
+  itself fails. That failure blanks the stored tokens, so `claude auth status` reports logged out
+  from then on — which is what the auth gate above reads. Before the first failed refresh it
+  still reports a login, so the gate costs one doomed reaction per expiry.
 
 ## Lifecycle & persistence
 

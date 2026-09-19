@@ -59,6 +59,7 @@ Autonomously react to PR reviews on @nonreagent's open PRs. One-time setup on th
 
 Observe: `journalctl -u review-watcher -f` · attach reactions: `tmux -S ~/.review-watcher/tmux.sock attach`.
 Pause: `touch ~/.review-watcher/PAUSED` or `sudo systemctl stop review-watcher`.
+Expired `claude` login: the watcher holds reactions and the journal names the fix (`claude auth login`); reactions resume on the next poll after you log in.
 Design + plan: `docs/superpowers/specs/2026-07-08-review-watcher-design.md`, `docs/superpowers/plans/2026-07-08-review-watcher.md`.
 
 ## Sync
