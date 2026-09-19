@@ -8,6 +8,10 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_REPO="${SOURCE_REPO:-https://github.com/nonrational/dotfiles}"
 OUT="$REPO/home"
 OVERLAY="$REPO/overlay"
+# The clean filter .gitattributes names for home/.claude/settings.json (see CLAUDE.md,
+# Gotchas). Set here as well as in install.sh so a build-and-commit from any clone
+# strips the model key the same way.
+git -C "$REPO" config filter.strip-model.clean "jq --indent 2 'del(.model)'" 2>/dev/null || true
 
 # Source the upstream dotfiles. Default: clone fresh from GitHub so the build is
 # self-contained and reproducible on any host. Skills are symlinks into a

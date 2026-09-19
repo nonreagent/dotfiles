@@ -41,6 +41,12 @@ done < "$REPO/manifest"
 rc=0
 "$REPO/deploy.sh" apply || rc=$?
 
+# Claude Code rewrites the `model` key in settings.json whenever a session picks a
+# model, and the file is a live symlink into this repo. .gitattributes routes it
+# through this clean filter so the index never carries a model key and that churn
+# stays out of `git status`, while every other key still flows in from upstream.
+git -C "$REPO" config filter.strip-model.clean "jq --indent 2 'del(.model)'" 2>/dev/null || true
+
 # Prune orphaned symlinks: links from an earlier install that now dangle because
 # their source moved or was removed from home/ (e.g. a file relocated into a subdir
 # upstream). Scoped to the roots we manage — the top-level entries of home/ — so we
