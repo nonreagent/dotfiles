@@ -1,13 +1,13 @@
 ---
 name: memory-sweep
-description: Use when the per-project agent memory directories have accumulated facts that should outlive this machine — on a cadence, before a VM is retired, or when a memory file records something every future session should know. Routes each memory to the durable store it belongs to (shared rules, this agent's overlay, the project repo, the tracker), proves it landed, and retires the local copy.
+description: Use when the per-project agent memory directories have accumulated facts that should outlive this machine — on a cadence, before a machine is retired, or when a memory file records something every future session should know. Routes each memory to the durable store it belongs to (shared rules, the harness layer, the project repo, the tracker), proves it landed, and retires the local copy.
 argument-hint: "[project dir, or 'all']"
 disable-model-invocation: true
 ---
 
 # Memory Sweep
 
-Agent memory under `~/.claude/projects/<cwd-slug>/memory/` is per machine, uncommitted, and dies with the VM. Facts pile up there because writing one is cheap in the moment and nothing ever moves them out. This skill is the move-out: read everything, decide where each fact belongs, write it there, prove it landed, delete the local copy.
+Agent memory under `~/.claude/projects/<cwd-slug>/memory/` is per machine, uncommitted, and dies with the machine. Facts pile up there because writing one is cheap in the moment and nothing ever moves them out. This skill is the move-out: read everything, decide where each fact belongs, write it there, prove it landed, delete the local copy.
 
 The output is a few small PRs and a shorter memory directory, not a report about what could be done.
 
@@ -16,7 +16,7 @@ The output is a few small PRs and a shorter memory directory, not a report about
 Every fact has exactly one durable home. The concrete paths for this machine live in the dotfiles repo's `CLAUDE.md`; the tiers are:
 
 1. **Shared rules and skills** (the upstream dotfiles, public). Knowledge that holds in any repo on any machine: git, GitHub, the harness, tools, writing.
-2. **This agent's overlay** (the built dotfiles, public). Knowledge about this agent's identity, this VM, or the built-dotfiles repo itself: the VM-context file for box facts, the review-watcher playbook for watcher conduct, the repo's `CLAUDE.md` for working on the repo.
+2. **This harness's own layer** (in the dotfiles, public). Knowledge about this machine, this harness, or the dotfiles repo itself: the host-specific rc file for box facts, `home/.claude` for harness config, the repo's `CLAUDE.md` for working on the repo.
 3. **The project repo** (often private). Domain rulings, codebase conventions the code does not state, the project's environment on this box. Follow the repo's own convention (`.claude/memory/` with an index, `CLAUDE.md`, an ADR) and its file naming.
 4. **The tracker.** In-flight status. A PR or issue is the durable record of what is open, what was deferred, and what must not be re-litigated.
 
@@ -27,7 +27,7 @@ Anything already encoded at its destination has a fifth home: the bin.
 Ask in order. The first yes wins.
 
 1. Would this hold in any repo on any machine? Tier 1.
-2. Is it about this agent, this VM, or the dotfiles build? Tier 2.
+2. Is it about this machine, this harness, or the dotfiles repo itself? Tier 2.
 3. Is it project domain, a codebase convention, or the project's environment here? Tier 3.
 4. Is it status: which PR is where, what a sweep did, what awaits review? Tier 4. Verify the tracker holds it, then delete.
 
@@ -37,7 +37,7 @@ A file often holds two facts, a generic lesson and the project instance that tau
 
 ### 1. Inventory
 
-List every memory directory, including the ones for worktrees and review-watcher checkouts, and read every file. The directory name encodes the working directory it belongs to; a note filed under the wrong project (about repo B, written while in repo A) relocates, it does not route.
+List every memory directory, including the ones for worktrees, and read every file. The directory name encodes the working directory it belongs to; a note filed under the wrong project (about repo B, written while in repo A) relocates, it does not route.
 
 ### 2. Verify status before routing
 
@@ -53,7 +53,7 @@ Produce the routing table (file, tier, destination file, action: move, split, de
 - **Skills:** a bullet in the section that governs the behaviour, plus a red-flag line when the failure is silent.
 - **Project memory:** the repo's file convention and index. Keep the incident, the dates, and the file paths; a private repo may name people and systems.
 - **Tracker:** file the follow-ups the memory says were never filed, after searching for an existing issue (`gh issue list --state all --search`). One issue per concern.
-- **Overlay:** box facts in the VM-context file, watcher conduct in the playbook, repo mechanics in the repo `CLAUDE.md`. A tool bug gets an issue on the dotfiles repo, not a paragraph telling future sessions to work around it.
+- **Harness layer:** box facts in the host-specific rc file, harness config under `home/.claude`, repo mechanics in the repo `CLAUDE.md`. A tool bug gets an issue on the dotfiles repo, not a paragraph telling future sessions to work around it.
 
 Public tiers get one PR per repo, reviewed by the human. Each PR is a series of commits, one per surface, so a reviewer can drop one bullet without losing the rest.
 
@@ -70,7 +70,7 @@ Fill the pattern from the projects the memories came from. Clean means both comm
 
 ### 6. Run each destination's gate
 
-The dotfiles repos have their own (`make preflight` upstream, `./test/run.sh` here). A project repo's markdown may be format-checked in CI, so run its formatter check on the new files at their real path, and diff a `--write` pass before committing it.
+The dotfiles repo has its own (`make preflight`). A project repo's markdown may be format-checked in CI, so run its formatter check on the new files at their real path, and diff a `--write` pass before committing it.
 
 ### 7. Retire
 
