@@ -47,6 +47,10 @@ home/.agents/rules/prudence.md
 # find-inspiration is the human's manual curation loop, not an agent tool.
 home/.agents/skills
 !home/.agents/skills/find-inspiration
+# Eval suites are authoring-time test material for the skills' maintainer; the
+# agent never runs them, and they are most of the skills tree by file count.
+!home/.agents/skills/*/evals
+!home/.agents/skills/*/evals-*.md
 
 # claude (CLAUDE.md comes from the overlay). rules/ and skills/ are upstream
 # shims into .agents/ — both resolve inside home/ now that .agents is vendored,

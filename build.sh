@@ -92,15 +92,18 @@ while IFS= read -r entry || [ -n "$entry" ]; do
 done < "$REPO/allowlist"
 [ "${#sel[@]}" -gt 0 ] || { echo "error: allowlist selects nothing" >&2; exit 1; }
 
-# Path itself or under it — the same prefix test resolve_row uses. Records which
-# exclusions fired so a stale/typo'd '!' entry fails the build below.
+# Path itself or under it — the same prefix test resolve_row uses, except that an
+# exclusion may carry shell globs ('*' also spans '/'), so one line can drop a
+# per-skill directory like skills/*/evals. Records which exclusions fired so a
+# stale/typo'd '!' entry fails the build below.
 exclhit=()
 excluded() {
   local path="$1" i e
   [ "${#excl[@]}" -gt 0 ] || return 1
   for i in "${!excl[@]}"; do
     e="${excl[$i]}"
-    if [ "$path" = "$e" ] || [ "${path#"$e"/}" != "$path" ]; then
+    # shellcheck disable=SC2053  # $e is a glob on purpose
+    if [[ "$path" == $e || "$path" == $e/* ]]; then
       exclhit[$i]=1
       return 0
     fi

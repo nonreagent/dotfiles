@@ -83,6 +83,8 @@ test_allowlist_resolves() {
   [ ! -e "$REPO/home/.bashrc.Darwin" ] || { echo "  Darwin fragment leaked" >&2; return 1; }
   # a '!'-excluded sub-path must NOT be vendored:
   [ ! -e "$REPO/home/.agents/skills/find-inspiration" ] || { echo "  excluded skill leaked" >&2; return 1; }
+  # a glob exclusion must drop the per-skill eval suites:
+  [ -z "$(find "$REPO/home/.agents/skills" -name 'evals*' -print -quit)" ] || { echo "  skill evals leaked" >&2; return 1; }
 }
 
 # build.sh step 1b must refuse to deref a symlink whose target the allowlist
