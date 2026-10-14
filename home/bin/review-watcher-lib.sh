@@ -83,7 +83,7 @@ rw_latest_review() { # owner repo pr — newest non-PENDING review, or empty
              | if . == null then empty else [(.id|tostring), .state, .user.login] | @tsv end'
 }
 
-rw_merge_ready() { # owner repo pr — READY | PENDING | NOT_READY
+rw_merge_ready() { # owner repo pr — READY | PENDING | UNKNOWN | NOT_READY <reason>
   gh pr view "$3" --repo "$1/$2" --json reviewDecision,mergeable,statusCheckRollup \
    | jq -r '
        def is_red: (.conclusion // "") as $c | (.state // "") as $s |
@@ -92,8 +92,10 @@ rw_merge_ready() { # owner repo pr — READY | PENDING | NOT_READY
          or ($s == "FAILURE" or $s == "ERROR");
        def is_pending: (.status // "") as $st | (.state // "") as $s |
          ($st == "QUEUED" or $st == "IN_PROGRESS") or ($s == "PENDING");
-       if .reviewDecision != "APPROVED" or .mergeable != "MERGEABLE" then "NOT_READY"
-       elif (.statusCheckRollup | any(is_red)) then "NOT_READY"
+       if .reviewDecision != "APPROVED" then "NOT_READY review decision is \(.reviewDecision // "none"), not APPROVED"
+       elif (.statusCheckRollup | any(is_red)) then "NOT_READY a CI check is red"
+       elif .mergeable == "UNKNOWN" then "UNKNOWN"
+       elif .mergeable != "MERGEABLE" then "NOT_READY mergeable is \(.mergeable), not MERGEABLE"
        elif (.statusCheckRollup | any(is_pending)) then "PENDING"
        else "READY"
        end'
