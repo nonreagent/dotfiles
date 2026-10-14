@@ -7,17 +7,37 @@ rw_load_config
 owner="$1"; repo="$2"; pr="$3"
 max_attempts=20
 attempt=1
+# GitHub serves mergeable=UNKNOWN while it recomputes after a push (seconds), and
+# for good once a PR is merging or merged; the REST `merged` flag tells them apart.
+unknown_window="${RW_UNKNOWN_SECS:-30}"
+unknown_step="${RW_UNKNOWN_STEP:-5}"
+unknown_waited=0
 
 while [ "$attempt" -le "$max_attempts" ]; do
   v="$(rw_merge_ready "$owner" "$repo" "$pr")"
-  case "$v" in
+  case "${v%% *}" in
     READY)
       gh pr merge "$pr" --repo "$owner/$repo" --squash
+      sha="$(gh api "repos/$owner/$repo/pulls/$pr" --jq .merge_commit_sha 2>/dev/null || true)"
+      echo "rw-merge: merged $owner/$repo#$pr (squash, ${sha:-sha unavailable})"
       exit 0 ;;
     PENDING)
       sleep 30 ;;
+    UNKNOWN)
+      info="$(gh api "repos/$owner/$repo/pulls/$pr" --jq '[.merged, (.merged_by.login // "unknown"), (.merged_at // "")] | @tsv')"
+      IFS=$'\t' read -r merged by at <<<"$info"
+      if [ "$merged" = "true" ]; then
+        echo "rw-merge: $owner/$repo#$pr already merged by $by at $at"
+        exit 0
+      fi
+      if [ "$unknown_waited" -ge "$unknown_window" ]; then
+        echo "rw-merge: $owner/$repo#$pr mergeable still UNKNOWN after ${unknown_window}s; refusing to merge" >&2
+        exit 1
+      fi
+      sleep "$unknown_step"
+      unknown_waited=$((unknown_waited+unknown_step)) ;;
     NOT_READY)
-      echo "rw-merge: $owner/$repo#$pr is not ready to merge (not approved+mergeable, or CI is red); refusing to merge" >&2
+      echo "rw-merge: $owner/$repo#$pr is not ready to merge (${v#NOT_READY }); refusing to merge" >&2
       exit 1 ;;
   esac
   attempt=$((attempt+1))

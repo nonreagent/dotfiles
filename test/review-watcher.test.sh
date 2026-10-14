@@ -164,7 +164,7 @@ STUB
   chmod +x "$bin/gh"
   local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational myrepo 131)"
   rm -rf "$bin"
-  [ "$out" = "NOT_READY" ]
+  [[ "$out" == "NOT_READY "* ]]
 }
 
 test_merge_ready_conflicting_is_not_ready() {
@@ -178,7 +178,7 @@ STUB
   chmod +x "$bin/gh"
   local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational myrepo 131)"
   rm -rf "$bin"
-  [ "$out" = "NOT_READY" ]
+  [[ "$out" == "NOT_READY "* ]]
 }
 
 test_merge_ready_red_check_is_not_ready() {
@@ -195,7 +195,7 @@ STUB
   chmod +x "$bin/gh"
   local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational myrepo 131)"
   rm -rf "$bin"
-  [ "$out" = "NOT_READY" ]
+  [[ "$out" == "NOT_READY "* ]]
 }
 
 test_merge_ready_in_progress_is_pending() {
@@ -227,6 +227,74 @@ STUB
   local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational myrepo 131)"
   rm -rf "$bin"
   [ "$out" = "READY" ]
+}
+
+test_merge_ready_unknown_mergeable() {
+  local bin; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+echo '{"reviewDecision":"APPROVED","mergeable":"UNKNOWN","statusCheckRollup":[]}'
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational myrepo 131)"
+  rm -rf "$bin"
+  [ "$out" = "UNKNOWN" ]
+}
+
+test_merge_ready_names_failed_check() {
+  local bin; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+echo '{"reviewDecision":"REVIEW_REQUIRED","mergeable":"MERGEABLE","statusCheckRollup":[]}'
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(PATH="$bin:$PATH" rw_merge_ready nonrational myrepo 131)"
+  rm -rf "$bin"
+  [[ "$out" == *REVIEW_REQUIRED* ]]
+}
+
+# rw-merge against a gh stub: `pr view` serves an UNKNOWN verdict, `api` serves
+# $GH_API_OUT, `pr merge` is recorded.
+rwm_invoke() { # api_out — prints rw-merge's combined output; sets RWM_RC
+  local home bin; home="$(mktemp -d)"; bin="$(mktemp -d)"; : > "$home/config"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "pr view")  echo '{"reviewDecision":"APPROVED","mergeable":"UNKNOWN","statusCheckRollup":[]}' ;;
+  "pr merge") : > "$RW_HOME/merged-marker" ;;
+  api*)       printf '%b\n' "$GH_API_OUT" ;;
+esac
+STUB
+  chmod +x "$bin/gh"
+  RWM_OUT="$(RW_HOME="$home" PATH="$bin:$PATH" GH_API_OUT="$1" RW_UNKNOWN_SECS=0 \
+    "$REPO/overlay/bin/rw-merge" nonrational myrepo 131 2>&1)"; RWM_RC=$?
+  RWM_MERGED=0; [ -f "$home/merged-marker" ] && RWM_MERGED=1
+  rm -rf "$home" "$bin"
+}
+
+test_rw_merge_unknown_but_merged_exits_zero() {
+  rwm_invoke 'true\tnonrational\t2026-10-14T00:00:00Z'
+  [ "$RWM_RC" = 0 ] && [ "$RWM_MERGED" = 0 ] && [[ "$RWM_OUT" == *"already merged by nonrational"* ]]
+}
+
+test_rw_merge_unknown_unmerged_refuses_after_window() {
+  rwm_invoke 'false\tunknown\t'
+  [ "$RWM_RC" = 1 ] && [ "$RWM_MERGED" = 0 ] && [[ "$RWM_OUT" == *"still UNKNOWN"* ]]
+}
+
+test_rw_merge_success_prints_sha() {
+  local home bin; home="$(mktemp -d)"; bin="$(mktemp -d)"; : > "$home/config"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "pr view")  echo '{"reviewDecision":"APPROVED","mergeable":"MERGEABLE","statusCheckRollup":[]}' ;;
+  api*)       echo abc1234 ;;
+esac
+STUB
+  chmod +x "$bin/gh"
+  local out; out="$(RW_HOME="$home" PATH="$bin:$PATH" "$REPO/overlay/bin/rw-merge" nonrational myrepo 131 2>&1)"
+  rm -rf "$home" "$bin"
+  [[ "$out" == *"merged nonrational/myrepo#131 (squash, abc1234)"* ]]
 }
 
 # --- review-react end to end (stubbed externals) -------------------------------
@@ -342,6 +410,11 @@ check test_merge_ready_conflicting_is_not_ready
 check test_merge_ready_red_check_is_not_ready
 check test_merge_ready_in_progress_is_pending
 check test_merge_ready_empty_rollup_is_ready
+check test_merge_ready_unknown_mergeable
+check test_merge_ready_names_failed_check
+check test_rw_merge_unknown_but_merged_exits_zero
+check test_rw_merge_unknown_unmerged_refuses_after_window
+check test_rw_merge_success_prints_sha
 check test_react_approved_merges_then_marks_seen
 check test_react_approved_unmergeable_stays_unseen
 check test_react_changes_requested_marks_seen_without_merging
