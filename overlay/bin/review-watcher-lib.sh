@@ -100,3 +100,42 @@ rw_merge_ready() { # owner repo pr — READY | PENDING | UNKNOWN | NOT_READY <re
        else "READY"
        end'
 }
+
+rw_clone_dir() { # owner repo
+  printf '%s/repos/%s/%s' "$RW_HOME" "$1" "$2"
+}
+
+rw_worktree_dir() { # repo kind pr
+  printf '%s/worktrees/%s-%s-%s' "$RW_HOME" "$1" "$2" "$3"
+}
+
+# One worktree per session: sessions on different PRs in one repo used to share
+# the clone's working tree and reset it under each other.
+rw_prepare_worktree() { # owner repo pr kind — prints the worktree path
+  local clone wt
+  clone="$(rw_clone_dir "$1" "$2")"; wt="$(rw_worktree_dir "$2" "$4" "$3")"
+  mkdir -p "$(dirname "$clone")" "$RW_HOME/worktrees" || return 1
+  if [ -d "$clone/.git" ]; then
+    git -C "$clone" fetch --quiet origin || return 1
+  else
+    gh repo clone "$1/$2" "$clone" -- --quiet >&2 || return 1
+  fi
+  # Sessions before worktrees checked PR branches out in the clone itself, and a
+  # branch held there blocks `gh pr checkout` in every worktree.
+  git -C "$clone" checkout --quiet --detach || return 1
+  # A wrapper killed outright (reboot) leaves its worktree behind.
+  git -C "$clone" worktree remove --force "$wt" >/dev/null 2>&1 || true
+  rm -rf "$wt"
+  git -C "$clone" worktree prune
+  # Concurrent sessions share the clone and FETCH_HEAD is per-clone, so fetch into
+  # a per-PR ref rather than reading back whatever fetch ran last.
+  git -C "$clone" fetch --quiet origin "+pull/$3/head:refs/rw/pull/$3" || return 1
+  git -C "$clone" worktree add --quiet --detach "$wt" "refs/rw/pull/$3" >&2 || return 1
+  printf '%s' "$wt"
+}
+
+rw_remove_worktree() { # owner repo worktree_path
+  local clone; clone="$(rw_clone_dir "$1" "$2")"
+  git -C "$clone" worktree remove --force "$3" >/dev/null 2>&1 || rm -rf "$3"
+  git -C "$clone" worktree prune
+}

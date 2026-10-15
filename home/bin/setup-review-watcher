@@ -7,7 +7,7 @@ RW_HOME="$HOME/.review-watcher"
 SRC="$(cd "$HERE/../.." && pwd)/overlay/review-watcher"   # when run from a repo checkout
 [ -d "$SRC" ] || SRC="$HERE/../review-watcher"            # fallback
 
-mkdir -p "$RW_HOME"/{state,locks,logs,repos}
+mkdir -p "$RW_HOME"/{state,locks,logs,repos,worktrees}
 [ -f "$RW_HOME/config" ]   || cp "$SRC/config.example" "$RW_HOME/config"
 cp "$SRC/playbook.md" "$RW_HOME/playbook.md"              # playbook always refreshed from source
 

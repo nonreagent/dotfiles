@@ -303,10 +303,19 @@ STUB
 # `pr merge` call as $RW_HOME/merged-marker.
 
 RR_BIN="$(mktemp -d)"
+# A real bare origin, so the wrappers' clone/fetch/worktree steps run for real.
+RR_ORIGIN="$(mktemp -d)/origin.git"; export RR_ORIGIN
+git init -q --bare -b main "$RR_ORIGIN"
+( seed="$(mktemp -d)" && cd "$seed" && git init -q -b main \
+  && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m seed \
+  && git push -q "$RR_ORIGIN" HEAD:refs/heads/main \
+  && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m pr-head \
+  && git push -q "$RR_ORIGIN" HEAD:refs/pull/131/head \
+  && rm -rf "$seed" )
 cat > "$RR_BIN/gh" <<'STUB'
 #!/usr/bin/env bash
 case "$1 $2" in
-  "repo clone") mkdir -p "$4/.git" ;;
+  "repo clone") git clone --quiet "$RR_ORIGIN" "$4" ;;
   "pr view")    printf '%s\n' "$GH_PR_VIEW_JSON" ;;
   "pr merge")   : > "$RW_HOME/merged-marker" ;;
 esac
@@ -314,6 +323,9 @@ exit 0
 STUB
 cat > "$RR_BIN/claude" <<'STUB'
 #!/usr/bin/env bash
+pwd > "$RW_HOME/claude-cwd"
+git rev-parse HEAD > "$RW_HOME/claude-head"
+printf '%s' "${GH_REPO:-}" > "$RW_HOME/claude-gh-repo"
 echo agent-ok
 STUB
 chmod +x "$RR_BIN/gh" "$RR_BIN/claude"
@@ -389,6 +401,48 @@ STUB
   [ "$ok" = 1 ]
 }
 
+test_react_runs_in_its_own_worktree_and_removes_it() {
+  local home; home="$(mktemp -d)"
+  GH_PR_VIEW_JSON="$RR_GREEN" rr_invoke "$home" CHANGES_REQUESTED
+  local ok=0
+  [ "$(cat "$home/claude-cwd" 2>/dev/null)" = "$home/worktrees/myrepo-pr-131" ] \
+    && [ "$(cat "$home/claude-gh-repo" 2>/dev/null)" = "nonrational/myrepo" ] \
+    && [ ! -e "$home/worktrees/myrepo-pr-131" ] \
+    && [ "$(git -C "$home/repos/nonrational/myrepo" worktree list | wc -l)" -eq 1 ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+# The PR head differs from main, so a worktree cut from FETCH_HEAD or the default
+# branch instead of the per-PR ref fails here.
+test_react_worktree_lands_on_pr_head() {
+  local home; home="$(mktemp -d)"
+  GH_PR_VIEW_JSON="$RR_GREEN" rr_invoke "$home" CHANGES_REQUESTED
+  local want ok=0; want="$(git -C "$RR_ORIGIN" rev-parse refs/pull/131/head)"
+  [ "$(git -C "$home/repos/nonrational/myrepo" rev-parse refs/rw/pull/131)" = "$want" ] \
+    && [ "$(cat "$home/claude-head" 2>/dev/null)" = "$want" ] \
+    && [ "$want" != "$(git -C "$RR_ORIGIN" rev-parse refs/heads/main)" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+# A wrapper killed outright (reboot) leaves its worktree behind; the next session
+# on that PR must replace it rather than fail on "already exists".
+test_react_replaces_stale_worktree() {
+  local home; home="$(mktemp -d)"
+  GH_PR_VIEW_JSON="$RR_GREEN" rr_invoke "$home" CHANGES_REQUESTED
+  rm -f "$home/state/nonrational__myrepo__131.seen" "$home/claude-cwd"
+  git -C "$home/repos/nonrational/myrepo" worktree add --quiet --detach \
+    "$home/worktrees/myrepo-pr-131" HEAD
+  : > "$home/worktrees/myrepo-pr-131/leftover"
+  GH_PR_VIEW_JSON="$RR_GREEN" rr_invoke "$home" CHANGES_REQUESTED
+  local ok=0
+  [ "$(cat "$home/claude-cwd" 2>/dev/null)" = "$home/worktrees/myrepo-pr-131" ] \
+    && [ "$(cat "$home/state/nonrational__myrepo__131.seen" 2>/dev/null)" = "REV_1" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
@@ -418,7 +472,10 @@ check test_rw_merge_success_prints_sha
 check test_react_approved_merges_then_marks_seen
 check test_react_approved_unmergeable_stays_unseen
 check test_react_changes_requested_marks_seen_without_merging
+check test_react_runs_in_its_own_worktree_and_removes_it
+check test_react_replaces_stale_worktree
+check test_react_worktree_lands_on_pr_head
 check test_watcher_holds_reactions_while_logged_out
-rm -rf "$RR_BIN"
+rm -rf "$RR_BIN" "$(dirname "$RR_ORIGIN")"
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]
