@@ -318,6 +318,7 @@ case "$1 $2" in
   "repo clone") git clone --quiet "$RR_ORIGIN" "$4" ;;
   "pr view")    printf '%s\n' "$GH_PR_VIEW_JSON" ;;
   "pr merge")   : > "$RW_HOME/merged-marker" ;;
+  "pr edit")    echo "$*" >> "$RW_HOME/gh-edits.log" ;;
 esac
 exit 0
 STUB
@@ -326,6 +327,8 @@ cat > "$RR_BIN/claude" <<'STUB'
 pwd > "$RW_HOME/claude-cwd"
 git rev-parse HEAD > "$RW_HOME/claude-head"
 printf '%s' "${GH_REPO:-}" > "$RW_HOME/claude-gh-repo"
+[ -z "${CLAUDE_SLEEP:-}" ] || sleep "$CLAUDE_SLEEP"
+[ "${CLAUDE_FAIL:-0}" = 1 ] && exit 1
 echo agent-ok
 STUB
 chmod +x "$RR_BIN/gh" "$RR_BIN/claude"
@@ -336,7 +339,7 @@ rr_invoke() { # rw_home review_state — react to review REV_1 on myrepo#131
   # in production setup-review-watcher guarantees one exists.
   : > "$1/config"
   RW_HOME="$1" PATH="$RR_BIN:$PATH" GH_PR_VIEW_JSON="$GH_PR_VIEW_JSON" \
-    "$REPO/overlay/bin/review-react" nonrational myrepo 131 REV_1 "$2" nonrational \
+    CLAUDE_FAIL="${CLAUDE_FAIL:-0}" "$REPO/overlay/bin/review-react" nonrational myrepo 131 REV_1 "$2" nonrational \
     >/dev/null 2>&1
 }
 RR_GREEN='{"reviewDecision":"APPROVED","mergeable":"MERGEABLE","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}]}'
@@ -443,6 +446,55 @@ test_react_replaces_stale_worktree() {
   [ "$ok" = 1 ]
 }
 
+test_react_assigns_then_unassigns() {
+  local home; home="$(mktemp -d)"
+  GH_PR_VIEW_JSON="$RR_GREEN" rr_invoke "$home" CHANGES_REQUESTED
+  local ok=0
+  [ "$(wc -l < "$home/gh-edits.log")" -eq 2 ] \
+    && sed -n 1p "$home/gh-edits.log" | grep -q -- '--add-assignee nonreagent' \
+    && sed -n 2p "$home/gh-edits.log" | grep -q -- '--remove-assignee nonreagent' && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_react_unassigns_when_agent_fails() {
+  local home; home="$(mktemp -d)"
+  CLAUDE_FAIL=1 GH_PR_VIEW_JSON="$RR_GREEN" rr_invoke "$home" CHANGES_REQUESTED
+  local ok=0
+  tail -1 "$home/gh-edits.log" | grep -q -- '--remove-assignee nonreagent' \
+    && [ ! -f "$home/state/nonrational__myrepo__131.seen" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+# tmux kill-session sends SIGHUP; the assignment and worktree must still clear.
+test_react_unassigns_on_hangup() {
+  local home pid i ok=0; home="$(mktemp -d)"
+  printf 'playbook\n' > "$home/playbook.md"; : > "$home/config"
+  RW_HOME="$home" PATH="$RR_BIN:$PATH" CLAUDE_SLEEP=2 GH_PR_VIEW_JSON="$RR_GREEN" \
+    "$REPO/overlay/bin/review-react" nonrational myrepo 131 REV_1 CHANGES_REQUESTED nonrational \
+    >/dev/null 2>&1 &
+  pid=$!
+  for i in $(seq 50); do [ -f "$home/claude-cwd" ] && break; sleep 0.1; done
+  kill -HUP "$pid"; wait "$pid" 2>/dev/null
+  tail -1 "$home/gh-edits.log" 2>/dev/null | grep -q -- '--remove-assignee nonreagent' \
+    && [ ! -e "$home/worktrees/myrepo-pr-131" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+# A wrapper that loses the lock race must not touch the assignment, or it would
+# clear the live session's.
+test_react_lock_loss_does_not_assign() {
+  local home; home="$(mktemp -d)"; mkdir -p "$home/locks"
+  ( flock -n 9 && GH_PR_VIEW_JSON="$RR_GREEN" rr_invoke "$home" CHANGES_REQUESTED ) \
+    9>"$home/locks/nonrational__myrepo__131.lock"
+  local ok=0
+  [ ! -f "$home/gh-edits.log" ] && [ ! -f "$home/claude-cwd" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
@@ -475,6 +527,10 @@ check test_react_changes_requested_marks_seen_without_merging
 check test_react_runs_in_its_own_worktree_and_removes_it
 check test_react_replaces_stale_worktree
 check test_react_worktree_lands_on_pr_head
+check test_react_assigns_then_unassigns
+check test_react_unassigns_when_agent_fails
+check test_react_unassigns_on_hangup
+check test_react_lock_loss_does_not_assign
 check test_watcher_holds_reactions_while_logged_out
 rm -rf "$RR_BIN" "$(dirname "$RR_ORIGIN")"
 echo "----"; echo "$pass passed, $failc failed"

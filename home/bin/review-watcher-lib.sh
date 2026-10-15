@@ -139,3 +139,17 @@ rw_remove_worktree() { # owner repo worktree_path
   git -C "$clone" worktree remove --force "$3" >/dev/null 2>&1 || rm -rf "$3"
   git -C "$clone" worktree prune
 }
+
+# Assignment is a status light for the operator: the bot is assigned exactly while
+# a watcher session works the PR. Best-effort, so it never blocks the work.
+rw_assign() { # owner repo pr
+  gh pr edit "$3" --repo "$1/$2" --add-assignee "$RW_BOT_LOGIN" >/dev/null 2>&1 \
+    || echo "could not assign @$RW_BOT_LOGIN to $1/$2#$3" >&2
+  return 0
+}
+
+rw_unassign() { # owner repo pr
+  gh pr edit "$3" --repo "$1/$2" --remove-assignee "$RW_BOT_LOGIN" >/dev/null 2>&1 \
+    || echo "could not unassign @$RW_BOT_LOGIN from $1/$2#$3" >&2
+  return 0
+}

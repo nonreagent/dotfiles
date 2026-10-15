@@ -26,13 +26,15 @@ fi
 wt=""
 rw_react_cleanup() {
   cd /
-  [ -z "$wt" ] || rw_remove_worktree "$owner" "$repo" "$wt"
+  [ -z "$wt" ] || rw_remove_worktree "$owner" "$repo" "$wt" || true
+  rw_unassign "$owner" "$repo" "$pr"
 }
 trap rw_react_cleanup EXIT
 # tmux kill-session delivers SIGHUP; route fatal signals through exit so the EXIT
 # trap still runs.
 trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
 
+rw_assign "$owner" "$repo" "$pr"
 wt="$(rw_prepare_worktree "$owner" "$repo" "$pr" pr)"
 cd "$wt"
 # `gh repo clone` of a fork makes the parent gh's default repo, so unqualified gh
