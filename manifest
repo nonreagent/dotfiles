@@ -220,6 +220,7 @@ home/.vim/syntax_checkers/xhtml.vim	~/.vim/syntax_checkers/xhtml.vim
 home/.vim/syntax_checkers/xml.vim	~/.vim/syntax_checkers/xml.vim
 home/.vim/syntax_checkers/xslt.vim	~/.vim/syntax_checkers/xslt.vim
 home/.vimrc	~/.vimrc
+home/bin/review-pr	~/bin/review-pr
 home/bin/review-react	~/bin/review-react
 home/bin/review-watcher	~/bin/review-watcher
 home/bin/review-watcher-lib.sh	~/bin/review-watcher-lib.sh

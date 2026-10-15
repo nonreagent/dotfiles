@@ -324,6 +324,7 @@ case "$1 $2" in
   "pr view")    printf '%s\n' "$GH_PR_VIEW_JSON" ;;
   "pr merge")   : > "$RW_HOME/merged-marker" ;;
   "pr edit")    echo "$*" >> "$RW_HOME/gh-edits.log" ;;
+  api*)         printf '%s\n' "${GH_API_JSON:-[]}" ;;
 esac
 exit 0
 STUB
@@ -670,6 +671,87 @@ test_review_landed_ignores_older_review() {
 test_review_landed_ignores_comment_only_and_others() {
   ! rl_with_reviews '[{"user":{"login":"nonreagent"},"state":"COMMENTED","submitted_at":"2026-10-05T00:00:00Z"},{"user":{"login":"nonrational"},"state":"APPROVED","submitted_at":"2026-10-05T00:00:00Z"}]' 2026-10-04T00:00:00Z
 }
+rp_invoke() { # rw_home — review request REQ_1 on myrepo#131, requested at T0
+  printf 'review {{REPO}}#{{PR}} for {{REQUESTER}} budget={{TIMEOUT_MIN}}m\n' > "$1/review-playbook.md"
+  : > "$1/config"
+  RW_HOME="$1" PATH="$RR_BIN:$PATH" GH_API_JSON="${GH_API_JSON:-[]}" \
+    CLAUDE_FAIL="${CLAUDE_FAIL:-0}" RW_DRY_RUN="${RW_DRY_RUN:-0}" \
+    "$REPO/overlay/bin/review-pr" nonrational myrepo 131 REQ_1 nonrational 2026-10-14T00:00:00Z
+}
+RP_LANDED='[{"user":{"login":"nonreagent"},"state":"APPROVED","submitted_at":"2026-10-14T00:05:00Z"}]'
+
+test_review_pr_marks_seen_when_review_lands() {
+  local home ok=0; home="$(mktemp -d)"
+  GH_API_JSON="$RP_LANDED" rp_invoke "$home" >/dev/null 2>&1
+  [ "$(cat "$home/state/nonrational__myrepo__131.review-req" 2>/dev/null)" = "REQ_1" ] \
+    && [ "$(cat "$home/claude-cwd" 2>/dev/null)" = "$home/worktrees/myrepo-review-131" ] \
+    && [ "$(cat "$home/claude-gh-repo" 2>/dev/null)" = "nonrational/myrepo" ] \
+    && [ ! -e "$home/worktrees/myrepo-review-131" ] \
+    && [ ! -f "$home/merged-marker" ] \
+    && sed -n 1p "$home/gh-edits.log" | grep -q -- '--add-assignee nonreagent' \
+    && sed -n 2p "$home/gh-edits.log" | grep -q -- '--remove-assignee nonreagent' && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_review_pr_stays_unseen_without_review() {
+  local home ok=0; home="$(mktemp -d)"
+  GH_API_JSON='[]' rp_invoke "$home" >/dev/null 2>&1
+  [ ! -f "$home/state/nonrational__myrepo__131.review-req" ] \
+    && tail -1 "$home/gh-edits.log" | grep -q -- '--remove-assignee nonreagent' && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_review_pr_failed_exit_without_review_stays_unseen() {
+  local home ok=0; home="$(mktemp -d)"
+  CLAUDE_FAIL=1 GH_API_JSON='[]' rp_invoke "$home" >/dev/null 2>&1
+  [ ! -f "$home/state/nonrational__myrepo__131.review-req" ] \
+    && tail -1 "$home/gh-edits.log" | grep -q -- '--remove-assignee nonreagent' && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_review_pr_failed_exit_after_review_marks_seen() {
+  local home ok=0; home="$(mktemp -d)"
+  CLAUDE_FAIL=1 GH_API_JSON="$RP_LANDED" rp_invoke "$home" >/dev/null 2>&1
+  [ "$(cat "$home/state/nonrational__myrepo__131.review-req" 2>/dev/null)" = "REQ_1" ] \
+    && tail -1 "$home/gh-edits.log" | grep -q -- '--remove-assignee nonreagent' && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_review_pr_dry_run_prints_review_prompt() {
+  local home out ok=0; home="$(mktemp -d)"
+  out="$(RW_DRY_RUN=1 rp_invoke "$home" 2>/dev/null)"
+  [[ "$out" == *"claude -p"* ]] && [[ "$out" == *"nonrational/myrepo#131"* ]] && [[ "$out" == *nonrational* ]] \
+    && [[ "$out" == *"budget=25m"* ]] && [[ "$out" == *remote.origin.pushurl* ]] \
+    && [ ! -f "$home/gh-edits.log" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_review_pr_missing_playbook_logs_and_stays_unseen() {
+  local home err ok=0; home="$(mktemp -d)"
+  : > "$home/config"
+  err="$(RW_HOME="$home" PATH="$RR_BIN:$PATH" "$REPO/overlay/bin/review-pr" \
+    nonrational myrepo 131 REQ_1 nonrational 2026-10-14T00:00:00Z 2>&1 >/dev/null)"
+  [ $? -eq 0 ] && [[ "$err" == *review-playbook.md* ]] && [[ "$err" == *setup-review-watcher* ]] \
+    && grep -q setup-review-watcher "$home/logs/myrepo-review-131.log" \
+    && [ ! -f "$home/state/nonrational__myrepo__131.review-req" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_review_pr_shares_the_react_lock() {
+  local home ok=0; home="$(mktemp -d)"; mkdir -p "$home/locks"
+  ( flock -n 9 && GH_API_JSON="$RP_LANDED" rp_invoke "$home" >/dev/null 2>&1 ) \
+    9>"$home/locks/nonrational__myrepo__131.lock"
+  [ ! -f "$home/gh-edits.log" ] && [ ! -f "$home/claude-cwd" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
@@ -721,6 +803,13 @@ check test_latest_review_request_ignores_team_requests
 check test_review_landed_after_request
 check test_review_landed_ignores_older_review
 check test_review_landed_ignores_comment_only_and_others
+check test_review_pr_marks_seen_when_review_lands
+check test_review_pr_stays_unseen_without_review
+check test_review_pr_failed_exit_without_review_stays_unseen
+check test_review_pr_failed_exit_after_review_marks_seen
+check test_review_pr_dry_run_prints_review_prompt
+check test_review_pr_missing_playbook_logs_and_stays_unseen
+check test_review_pr_shares_the_react_lock
 rm -rf "$RR_BIN" "$(dirname "$RR_ORIGIN")" "$WB_BIN"
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]

@@ -10,6 +10,7 @@ SRC="$(cd "$HERE/../.." && pwd)/overlay/review-watcher"   # when run from a repo
 mkdir -p "$RW_HOME"/{state,locks,logs,repos,worktrees}
 [ -f "$RW_HOME/config" ]   || cp "$SRC/config.example" "$RW_HOME/config"
 cp "$SRC/playbook.md" "$RW_HOME/playbook.md"              # playbook always refreshed from source
+cp "$SRC/review-playbook.md" "$RW_HOME/review-playbook.md"
 
 sudo cp "$SRC/review-watcher.service" /etc/systemd/system/review-watcher.service
 sudo systemctl daemon-reload
