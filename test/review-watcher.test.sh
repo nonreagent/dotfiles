@@ -577,6 +577,99 @@ test_watcher_targets_tmux_sessions_exactly() {
   [ "$ok" = 1 ]
 }
 
+test_classify_request() {
+  REVIEWER_ALLOWLIST="nonrational"
+  [ "$(rw_classify_request nonrational nonrational true)"  = "SKIP" ] \
+  && [ "$(rw_classify_request alice nonrational false)"    = "NOTIFY" ] \
+  && [ "$(rw_classify_request nonrational alice false)"    = "NOTIFY" ] \
+  && [ "$(rw_classify_request nonrational nonrational false)" = "REVIEW" ]
+}
+
+test_request_seen_is_independent_of_review_seen() {
+  [ "$(rw_request_seen_file nonrational myrepo 77)" = "$RW_HOME/state/nonrational__myrepo__77.review-req" ] || return 1
+  rw_is_request_seen nonrational myrepo 77 EV_1 && return 1
+  rw_mark_request_seen nonrational myrepo 77 EV_1
+  rw_is_request_seen nonrational myrepo 77 EV_1 || return 1
+  rw_is_seen nonrational myrepo 77 EV_1 && return 1      # review-seen untouched
+  rw_is_request_seen nonrational myrepo 77 EV_2 && return 1   # a re-request is unseen
+  return 0
+}
+
+test_render_substitutes_requester() {
+  local tpl out; tpl="$(mktemp)"
+  printf '{{REPO}}#{{PR}} for {{REQUESTER}}\n' > "$tpl"
+  out="$(rw_render_playbook "$tpl" myrepo 131 REVIEW_REQUESTED nonrational nonrational)"
+  rm -f "$tpl"
+  [ "$out" = "myrepo#131 for nonrational" ]
+}
+
+test_review_requests_parses_search() {
+  local bin out; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  *"--review-requested nonreagent"*)
+    echo '[{"repository":{"nameWithOwner":"nonrational/myrepo"},"number":9,"isDraft":true,"author":{"login":"nonrational"}}]' ;;
+  *) echo '[]' ;;
+esac
+STUB
+  chmod +x "$bin/gh"
+  out="$(PATH="$bin:$PATH" rw_review_requests)"
+  rm -rf "$bin"
+  [ "$out" = "$(printf 'nonrational\tmyrepo\t9\ttrue\tnonrational')" ]
+}
+
+test_latest_review_request_picks_newest_for_bot() {
+  local bin out; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+[{"id":10,"event":"review_requested","created_at":"2026-10-01T00:00:00Z","requested_reviewer":{"login":"nonreagent"},"review_requester":{"login":"nonrational"}},
+ {"id":11,"event":"commented","created_at":"2026-10-02T00:00:00Z"},
+ {"id":12,"event":"review_requested","created_at":"2026-10-03T00:00:00Z","requested_reviewer":{"login":"someone"},"review_requester":{"login":"nonrational"}},
+ {"id":13,"event":"review_requested","created_at":"2026-10-04T00:00:00Z","requested_reviewer":{"login":"nonreagent"},"review_requester":{"login":"alice"}}]
+JSON
+STUB
+  chmod +x "$bin/gh"
+  out="$(PATH="$bin:$PATH" rw_latest_review_request nonrational myrepo 9)"
+  rm -rf "$bin"
+  [ "$out" = "$(printf '13\talice\t2026-10-04T00:00:00Z')" ]
+}
+
+# A team request carries requested_team, not requested_reviewer.
+test_latest_review_request_ignores_team_requests() {
+  local bin out; bin="$(mktemp -d)"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+echo '[{"id":20,"event":"review_requested","created_at":"2026-10-01T00:00:00Z","requested_team":{"slug":"core"},"review_requester":{"login":"nonrational"}}]'
+STUB
+  chmod +x "$bin/gh"
+  out="$(PATH="$bin:$PATH" rw_latest_review_request nonrational myrepo 9)"; local rc=$?
+  rm -rf "$bin"
+  [ "$rc" = 0 ] && [ -z "$out" ]
+}
+
+rl_with_reviews() { # reviews_json since — runs rw_review_landed against a stub
+  local bin rc; bin="$(mktemp -d)"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$GH_REVIEWS"\n' > "$bin/gh"
+  chmod +x "$bin/gh"
+  GH_REVIEWS="$1" PATH="$bin:$PATH" rw_review_landed nonrational myrepo 9 "$2"; rc=$?
+  rm -rf "$bin"
+  return "$rc"
+}
+
+test_review_landed_after_request() {
+  rl_with_reviews '[{"user":{"login":"nonreagent"},"state":"CHANGES_REQUESTED","submitted_at":"2026-10-05T00:00:00Z"}]' 2026-10-04T00:00:00Z
+}
+
+# A review from an earlier request round must not satisfy a new request.
+test_review_landed_ignores_older_review() {
+  ! rl_with_reviews '[{"user":{"login":"nonreagent"},"state":"APPROVED","submitted_at":"2026-10-01T00:00:00Z"}]' 2026-10-04T00:00:00Z
+}
+
+test_review_landed_ignores_comment_only_and_others() {
+  ! rl_with_reviews '[{"user":{"login":"nonreagent"},"state":"COMMENTED","submitted_at":"2026-10-05T00:00:00Z"},{"user":{"login":"nonrational"},"state":"APPROVED","submitted_at":"2026-10-05T00:00:00Z"}]' 2026-10-04T00:00:00Z
+}
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
@@ -619,6 +712,15 @@ check test_review_session_name_is_distinct
 check test_sweep_clears_assignment_without_session
 check test_sweep_keeps_assignment_with_live_review_session
 check test_watcher_targets_tmux_sessions_exactly
+check test_classify_request
+check test_request_seen_is_independent_of_review_seen
+check test_render_substitutes_requester
+check test_review_requests_parses_search
+check test_latest_review_request_picks_newest_for_bot
+check test_latest_review_request_ignores_team_requests
+check test_review_landed_after_request
+check test_review_landed_ignores_older_review
+check test_review_landed_ignores_comment_only_and_others
 rm -rf "$RR_BIN" "$(dirname "$RR_ORIGIN")" "$WB_BIN"
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]

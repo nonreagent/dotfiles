@@ -69,9 +69,10 @@ rw_review_session_name() { # owner repo pr
   printf '%s-review-%s' "${2//[.:]/_}" "$3"
 }
 
-rw_render_playbook() { # template_file repo pr review_state reviewer
+rw_render_playbook() { # template_file repo pr review_state reviewer [requester]
   sed -e "s|{{REPO}}|$2|g" -e "s|{{PR}}|$3|g" \
-      -e "s|{{REVIEW_STATE}}|$4|g" -e "s|{{REVIEWER}}|$5|g" "$1"
+      -e "s|{{REVIEW_STATE}}|$4|g" -e "s|{{REVIEWER}}|$5|g" \
+      -e "s|{{REQUESTER}}|${6:-}|g" "$1"
 }
 
 rw_search_prs() { # gh search flags... — open PRs as TSV: owner repo pr is_draft author
@@ -160,4 +161,52 @@ rw_unassign() { # owner repo pr
   gh pr edit "$3" --repo "$1/$2" --remove-assignee "$RW_BOT_LOGIN" >/dev/null 2>&1 \
     || echo "could not unassign @$RW_BOT_LOGIN from $1/$2#$3" >&2
   return 0
+}
+
+rw_review_requests() { rw_search_prs --review-requested "$RW_BOT_LOGIN"; }
+
+# The event id is the dedup key: GitHub clears the request when the bot reviews, and
+# a re-request mints a new event, so "review it again" needs no extra state.
+rw_latest_review_request() { # owner repo pr — event_id requester created_at, or empty
+  gh api "repos/$1/$2/issues/$3/timeline" --paginate \
+   | jq -rs --arg me "$RW_BOT_LOGIN" '
+       (add // []) | map(select(.event == "review_requested"
+                                and (.requested_reviewer.login? // "") == $me))
+       | sort_by(.created_at) | last
+       | if . == null then empty
+         else [(.id|tostring), .review_requester.login, .created_at] | @tsv end'
+}
+
+# Both ends must be trusted: the session runs with bypassPermissions over the PR's
+# code, so an untrusted author could steer it as surely as an untrusted requester.
+rw_classify_request() { # author requester is_draft
+  [ "$3" = "true" ] && { echo SKIP; return; }
+  if rw_in_allowlist "$1" "$REVIEWER_ALLOWLIST" && rw_in_allowlist "$2" "$REVIEWER_ALLOWLIST"; then
+    echo REVIEW
+  else
+    echo NOTIFY
+  fi
+}
+
+rw_request_seen_file() { # owner repo pr
+  printf '%s/state/%s__%s__%s.review-req' "$RW_HOME" "$1" "$2" "$3"
+}
+
+rw_is_request_seen() { # owner repo pr event_id
+  local f; f="$(rw_request_seen_file "$1" "$2" "$3")"
+  [ -f "$f" ] && [ "$(cat "$f")" = "$4" ]
+}
+
+rw_mark_request_seen() { # owner repo pr event_id
+  local f; f="$(rw_request_seen_file "$1" "$2" "$3")"
+  mkdir -p "$(dirname "$f")"
+  printf '%s' "$4" > "$f"
+}
+
+rw_review_landed() { # owner repo pr since — did the bot submit a verdict after `since`?
+  gh api "repos/$1/$2/pulls/$3/reviews" --paginate \
+   | jq -es --arg me "$RW_BOT_LOGIN" --arg since "$4" '
+       (add // []) | any(.user.login == $me
+                         and (.state == "APPROVED" or .state == "CHANGES_REQUESTED")
+                         and .submitted_at > $since)' >/dev/null
 }
