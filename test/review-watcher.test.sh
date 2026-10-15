@@ -97,6 +97,11 @@ test_logged_in_bounded_by_timeout() {
 test_session_name_is_repo_qualified() {
   [ "$(rw_session_name nonrational myrepo 131)" = "myrepo-pr-131" ]
 }
+# tmux turns "." into "_" in session names; a raw dotted name never matches has-session.
+test_session_names_sanitize_dotted_repos() {
+  [ "$(rw_session_name o foo.github.io 3)" = "foo_github_io-pr-3" ] \
+    && [ "$(rw_review_session_name o foo.github.io 3)" = "foo_github_io-review-3" ]
+}
 test_render_substitutes_placeholders() {
   local tpl; tpl="$(mktemp)"
   printf 'repo={{REPO}} pr={{PR}} state={{REVIEW_STATE}} who={{REVIEWER}}\n' > "$tpl"
@@ -495,6 +500,83 @@ test_react_lock_loss_does_not_assign() {
   [ "$ok" = 1 ]
 }
 
+# --- review-watcher end to end (stubbed externals) ------------------------------
+WB_BIN="$(mktemp -d)"
+cat > "$WB_BIN/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  search)
+    case "$*" in
+      *--assignee*)         printf '%s\n' "${GH_ASSIGNED:-[]}" ;;
+      *--review-requested*) printf '%s\n' "${GH_REQUESTED:-[]}" ;;
+      *)                    printf '%s\n' "${GH_AUTHORED:-[]}" ;;
+    esac ;;
+  api)
+    case "$2" in
+      */timeline) printf '%s\n' "${GH_TIMELINE:-[]}" ;;
+      *)          echo '[]' ;;
+    esac ;;
+  pr) echo "$*" >> "$RW_HOME/gh-calls.log" ;;
+esac
+exit 0
+STUB
+cat > "$WB_BIN/tmux" <<'STUB'
+#!/usr/bin/env bash
+case "$3" in                     # argv: -S <sock> <command> ...
+  has-session) echo "$5" >> "$RW_HOME/tmux-has.log"
+               [ -n "${TMUX_LIVE:-}" ] && [ "$5" = "=$TMUX_LIVE" ] ;;
+  new-session) echo "$*" >> "$RW_HOME/tmux-new.log" ;;
+  list-sessions) [ -n "${TMUX_LIVE:-}" ] && echo "$TMUX_LIVE: 1 windows" ;;
+esac
+STUB
+cat > "$WB_BIN/claude" <<'STUB'
+#!/usr/bin/env bash
+if [ "${CLAUDE_LOGGED_IN:-0}" = 1 ]; then echo '{"loggedIn":true}'; exit 0; fi
+echo '{"loggedIn":false}'; exit 1
+STUB
+chmod +x "$WB_BIN/gh" "$WB_BIN/tmux" "$WB_BIN/claude"
+
+wb_invoke() { # rw_home — one poll
+  : > "$1/config"
+  RW_HOME="$1" PATH="$WB_BIN:$PATH" \
+    GH_ASSIGNED="${GH_ASSIGNED:-[]}" GH_REQUESTED="${GH_REQUESTED:-[]}" \
+    GH_AUTHORED="${GH_AUTHORED:-[]}" GH_TIMELINE="${GH_TIMELINE:-[]}" \
+    TMUX_LIVE="${TMUX_LIVE:-}" CLAUDE_LOGGED_IN="${CLAUDE_LOGGED_IN:-0}" \
+    "$REPO/overlay/bin/review-watcher" --once >/dev/null 2>&1
+}
+WB_PR131='[{"repository":{"nameWithOwner":"nonrational/myrepo"},"number":131,"isDraft":false,"author":{"login":"nonrational"}}]'
+
+test_review_session_name_is_distinct() {
+  [ "$(rw_review_session_name nonrational myrepo 131)" = "myrepo-review-131" ] \
+    && [ "$(rw_review_session_name nonrational myrepo 131)" != "$(rw_session_name nonrational myrepo 131)" ]
+}
+
+test_sweep_clears_assignment_without_session() {
+  local home ok=0; home="$(mktemp -d)"
+  GH_ASSIGNED="$WB_PR131" wb_invoke "$home"
+  grep -q -- 'pr edit 131 --repo nonrational/myrepo --remove-assignee nonreagent' "$home/gh-calls.log" 2>/dev/null && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_sweep_keeps_assignment_with_live_review_session() {
+  local home ok=0; home="$(mktemp -d)"
+  GH_ASSIGNED="$WB_PR131" TMUX_LIVE=myrepo-review-131 wb_invoke "$home"
+  ! grep -q -- '--remove-assignee' "$home/gh-calls.log" 2>/dev/null && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+# tmux resolves a bare target by prefix, so `myrepo-pr-1` would match a live
+# `myrepo-pr-13`. Every has-session must use the exact `=name` form.
+test_watcher_targets_tmux_sessions_exactly() {
+  local home ok=0; home="$(mktemp -d)"
+  GH_ASSIGNED="$WB_PR131" wb_invoke "$home"
+  [ -s "$home/tmux-has.log" ] && ! grep -qv '^=' "$home/tmux-has.log" && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
 check test_config_defaults
 check test_config_override
 check test_seen_file_path
@@ -507,6 +589,7 @@ check test_classify_trusted_states
 check test_logged_in_reads_auth_status
 check test_logged_in_bounded_by_timeout
 check test_session_name_is_repo_qualified
+check test_session_names_sanitize_dotted_repos
 check test_render_substitutes_placeholders
 check test_open_prs_parses_search
 check test_latest_review_picks_newest_nonpending
@@ -532,6 +615,10 @@ check test_react_unassigns_when_agent_fails
 check test_react_unassigns_on_hangup
 check test_react_lock_loss_does_not_assign
 check test_watcher_holds_reactions_while_logged_out
-rm -rf "$RR_BIN" "$(dirname "$RR_ORIGIN")"
+check test_review_session_name_is_distinct
+check test_sweep_clears_assignment_without_session
+check test_sweep_keeps_assignment_with_live_review_session
+check test_watcher_targets_tmux_sessions_exactly
+rm -rf "$RR_BIN" "$(dirname "$RR_ORIGIN")" "$WB_BIN"
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]

@@ -59,8 +59,14 @@ rw_classify() { # reviewer state is_draft pr_author
   esac
 }
 
+# tmux rewrites "." and ":" in session names (foo.github.io becomes foo_github_io),
+# so an exact has-session match on the raw repo name never finds the session.
 rw_session_name() { # owner repo pr
-  printf '%s-pr-%s' "$2" "$3"
+  printf '%s-pr-%s' "${2//[.:]/_}" "$3"
+}
+
+rw_review_session_name() { # owner repo pr
+  printf '%s-review-%s' "${2//[.:]/_}" "$3"
 }
 
 rw_render_playbook() { # template_file repo pr review_state reviewer
@@ -68,14 +74,16 @@ rw_render_playbook() { # template_file repo pr review_state reviewer
       -e "s|{{REVIEW_STATE}}|$4|g" -e "s|{{REVIEWER}}|$5|g" "$1"
 }
 
-rw_open_prs() {
-  gh search prs --author "$RW_BOT_LOGIN" --state open \
+rw_search_prs() { # gh search flags... — open PRs as TSV: owner repo pr is_draft author
+  gh search prs "$@" --state open \
      --json repository,number,isDraft,author --limit 100 \
    | jq -r '.[] | [(.repository.nameWithOwner|split("/")[0]),
                     (.repository.nameWithOwner|split("/")[1]),
                     (.number|tostring), (.isDraft|tostring), .author.login]
                    | @tsv'
 }
+
+rw_open_prs() { rw_search_prs --author "$RW_BOT_LOGIN"; }
 
 rw_latest_review() { # owner repo pr — newest non-PENDING review, or empty
   gh api "repos/$1/$2/pulls/$3/reviews" --paginate \
