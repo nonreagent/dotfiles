@@ -763,6 +763,56 @@ check test_classify_self_review_is_skip
 check test_classify_trusted_states
 check test_logged_in_reads_auth_status
 check test_logged_in_bounded_by_timeout
+WB_REQ_EVENT='[{"id":55,"event":"review_requested","created_at":"2026-10-14T00:00:00Z","requested_reviewer":{"login":"nonreagent"},"review_requester":{"login":"nonrational"}}]'
+
+test_watcher_launches_review_for_trusted_request() {
+  local home ok=0; home="$(mktemp -d)"
+  GH_REQUESTED="$WB_PR131" GH_TIMELINE="$WB_REQ_EVENT" CLAUDE_LOGGED_IN=1 wb_invoke "$home"
+  grep -q -- '-s myrepo-review-131 .*review-pr nonrational myrepo 131 55 nonrational 2026-10-14T00:00:00Z' \
+    "$home/tmux-new.log" 2>/dev/null \
+    && grep -qx '=myrepo-review-131' "$home/tmux-has.log" 2>/dev/null && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_watcher_notifies_untrusted_requester() {
+  local home ok=0; home="$(mktemp -d)"
+  GH_REQUESTED="$WB_PR131" CLAUDE_LOGGED_IN=1 \
+    GH_TIMELINE="$(sed 's/"review_requester":{"login":"nonrational"}/"review_requester":{"login":"mallory"}/' <<<"$WB_REQ_EVENT")" \
+    wb_invoke "$home"
+  grep -q '^pr comment 131 --repo nonrational/myrepo' "$home/gh-calls.log" 2>/dev/null \
+    && [ "$(cat "$home/state/nonrational__myrepo__131.review-req" 2>/dev/null)" = "55" ] \
+    && [ ! -f "$home/tmux-new.log" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_watcher_leaves_draft_request_unseen() {
+  local home ok=0; home="$(mktemp -d)"
+  GH_REQUESTED="$(sed 's/"isDraft":false/"isDraft":true/' <<<"$WB_PR131")" GH_TIMELINE="$WB_REQ_EVENT" \
+    CLAUDE_LOGGED_IN=1 wb_invoke "$home"
+  [ ! -f "$home/state/nonrational__myrepo__131.review-req" ] && [ ! -f "$home/tmux-new.log" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_watcher_skips_seen_request() {
+  local home ok=0; home="$(mktemp -d)"
+  mkdir -p "$home/state"; printf '55' > "$home/state/nonrational__myrepo__131.review-req"
+  GH_REQUESTED="$WB_PR131" GH_TIMELINE="$WB_REQ_EVENT" CLAUDE_LOGGED_IN=1 wb_invoke "$home"
+  [ ! -f "$home/tmux-new.log" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
+test_watcher_holds_reviews_while_logged_out() {
+  local home ok=0; home="$(mktemp -d)"
+  GH_REQUESTED="$WB_PR131" GH_TIMELINE="$WB_REQ_EVENT" CLAUDE_LOGGED_IN=0 wb_invoke "$home"
+  [ ! -f "$home/tmux-new.log" ] && [ ! -f "$home/state/nonrational__myrepo__131.review-req" ] && ok=1
+  rm -rf "$home"
+  [ "$ok" = 1 ]
+}
+
 check test_session_name_is_repo_qualified
 check test_session_names_sanitize_dotted_repos
 check test_render_substitutes_placeholders
@@ -810,6 +860,11 @@ check test_review_pr_failed_exit_after_review_marks_seen
 check test_review_pr_dry_run_prints_review_prompt
 check test_review_pr_missing_playbook_logs_and_stays_unseen
 check test_review_pr_shares_the_react_lock
+check test_watcher_launches_review_for_trusted_request
+check test_watcher_notifies_untrusted_requester
+check test_watcher_leaves_draft_request_unseen
+check test_watcher_skips_seen_request
+check test_watcher_holds_reviews_while_logged_out
 rm -rf "$RR_BIN" "$(dirname "$RR_ORIGIN")" "$WB_BIN"
 echo "----"; echo "$pass passed, $failc failed"
 [ "$failc" -eq 0 ]
