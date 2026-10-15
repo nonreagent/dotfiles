@@ -59,23 +59,32 @@ rw_classify() { # reviewer state is_draft pr_author
   esac
 }
 
+# tmux rewrites "." and ":" in session names (foo.github.io becomes foo_github_io),
+# so an exact has-session match on the raw repo name never finds the session.
 rw_session_name() { # owner repo pr
-  printf '%s-pr-%s' "$2" "$3"
+  printf '%s-pr-%s' "${2//[.:]/_}" "$3"
 }
 
-rw_render_playbook() { # template_file repo pr review_state reviewer
+rw_review_session_name() { # owner repo pr
+  printf '%s-review-%s' "${2//[.:]/_}" "$3"
+}
+
+rw_render_playbook() { # template_file repo pr review_state reviewer [requester]
   sed -e "s|{{REPO}}|$2|g" -e "s|{{PR}}|$3|g" \
-      -e "s|{{REVIEW_STATE}}|$4|g" -e "s|{{REVIEWER}}|$5|g" "$1"
+      -e "s|{{REVIEW_STATE}}|$4|g" -e "s|{{REVIEWER}}|$5|g" \
+      -e "s|{{REQUESTER}}|${6:-}|g" "$1"
 }
 
-rw_open_prs() {
-  gh search prs --author "$RW_BOT_LOGIN" --state open \
+rw_search_prs() { # gh search flags... — open PRs as TSV: owner repo pr is_draft author
+  gh search prs "$@" --state open \
      --json repository,number,isDraft,author --limit 100 \
    | jq -r '.[] | [(.repository.nameWithOwner|split("/")[0]),
                     (.repository.nameWithOwner|split("/")[1]),
                     (.number|tostring), (.isDraft|tostring), .author.login]
                    | @tsv'
 }
+
+rw_open_prs() { rw_search_prs --author "$RW_BOT_LOGIN"; }
 
 rw_latest_review() { # owner repo pr — newest non-PENDING review, or empty
   gh api "repos/$1/$2/pulls/$3/reviews" --paginate \
@@ -99,4 +108,105 @@ rw_merge_ready() { # owner repo pr — READY | PENDING | UNKNOWN | NOT_READY <re
        elif (.statusCheckRollup | any(is_pending)) then "PENDING"
        else "READY"
        end'
+}
+
+rw_clone_dir() { # owner repo
+  printf '%s/repos/%s/%s' "$RW_HOME" "$1" "$2"
+}
+
+rw_worktree_dir() { # repo kind pr
+  printf '%s/worktrees/%s-%s-%s' "$RW_HOME" "$1" "$2" "$3"
+}
+
+# One worktree per session: sessions on different PRs in one repo used to share
+# the clone's working tree and reset it under each other.
+rw_prepare_worktree() { # owner repo pr kind — prints the worktree path
+  local clone wt
+  clone="$(rw_clone_dir "$1" "$2")"; wt="$(rw_worktree_dir "$2" "$4" "$3")"
+  mkdir -p "$(dirname "$clone")" "$RW_HOME/worktrees" || return 1
+  if [ -d "$clone/.git" ]; then
+    git -C "$clone" fetch --quiet origin || return 1
+  else
+    gh repo clone "$1/$2" "$clone" -- --quiet >&2 || return 1
+  fi
+  # Sessions before worktrees checked PR branches out in the clone itself, and a
+  # branch held there blocks `gh pr checkout` in every worktree.
+  git -C "$clone" checkout --quiet --detach || return 1
+  # A wrapper killed outright (reboot) leaves its worktree behind.
+  git -C "$clone" worktree remove --force "$wt" >/dev/null 2>&1 || true
+  rm -rf "$wt"
+  git -C "$clone" worktree prune
+  # Concurrent sessions share the clone and FETCH_HEAD is per-clone, so fetch into
+  # a per-PR ref rather than reading back whatever fetch ran last.
+  git -C "$clone" fetch --quiet origin "+pull/$3/head:refs/rw/pull/$3" || return 1
+  git -C "$clone" worktree add --quiet --detach "$wt" "refs/rw/pull/$3" >&2 || return 1
+  printf '%s' "$wt"
+}
+
+rw_remove_worktree() { # owner repo worktree_path
+  local clone; clone="$(rw_clone_dir "$1" "$2")"
+  git -C "$clone" worktree remove --force "$3" >/dev/null 2>&1 || rm -rf "$3"
+  git -C "$clone" worktree prune
+}
+
+# Assignment is a status light for the operator: the bot is assigned exactly while
+# a watcher session works the PR. Best-effort, so it never blocks the work.
+rw_assign() { # owner repo pr
+  gh pr edit "$3" --repo "$1/$2" --add-assignee "$RW_BOT_LOGIN" >/dev/null 2>&1 \
+    || echo "could not assign @$RW_BOT_LOGIN to $1/$2#$3" >&2
+  return 0
+}
+
+rw_unassign() { # owner repo pr
+  gh pr edit "$3" --repo "$1/$2" --remove-assignee "$RW_BOT_LOGIN" >/dev/null 2>&1 \
+    || echo "could not unassign @$RW_BOT_LOGIN from $1/$2#$3" >&2
+  return 0
+}
+
+rw_review_requests() { rw_search_prs --review-requested "$RW_BOT_LOGIN"; }
+
+# The event id is the dedup key: GitHub clears the request when the bot reviews, and
+# a re-request mints a new event, so "review it again" needs no extra state.
+rw_latest_review_request() { # owner repo pr — event_id requester created_at, or empty
+  gh api "repos/$1/$2/issues/$3/timeline" --paginate \
+   | jq -rs --arg me "$RW_BOT_LOGIN" '
+       (add // []) | map(select(.event == "review_requested"
+                                and (.requested_reviewer.login? // "") == $me))
+       | sort_by(.created_at) | last
+       | if . == null then empty
+         else [(.id|tostring), .review_requester.login, .created_at] | @tsv end'
+}
+
+# Both ends must be trusted: the session runs with bypassPermissions over the PR's
+# code, so an untrusted author could steer it as surely as an untrusted requester.
+rw_classify_request() { # author requester is_draft
+  [ "$3" = "true" ] && { echo SKIP; return; }
+  if rw_in_allowlist "$1" "$REVIEWER_ALLOWLIST" && rw_in_allowlist "$2" "$REVIEWER_ALLOWLIST"; then
+    echo REVIEW
+  else
+    echo NOTIFY
+  fi
+}
+
+rw_request_seen_file() { # owner repo pr
+  printf '%s/state/%s__%s__%s.review-req' "$RW_HOME" "$1" "$2" "$3"
+}
+
+rw_is_request_seen() { # owner repo pr event_id
+  local f; f="$(rw_request_seen_file "$1" "$2" "$3")"
+  [ -f "$f" ] && [ "$(cat "$f")" = "$4" ]
+}
+
+rw_mark_request_seen() { # owner repo pr event_id
+  local f; f="$(rw_request_seen_file "$1" "$2" "$3")"
+  mkdir -p "$(dirname "$f")"
+  printf '%s' "$4" > "$f"
+}
+
+rw_review_landed() { # owner repo pr since — did the bot submit a verdict after `since`?
+  gh api "repos/$1/$2/pulls/$3/reviews" --paginate \
+   | jq -es --arg me "$RW_BOT_LOGIN" --arg since "$4" '
+       (add // []) | any(.user.login == $me
+                         and (.state == "APPROVED" or .state == "CHANGES_REQUESTED")
+                         and .submitted_at > $since)' >/dev/null
 }

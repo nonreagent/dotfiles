@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+. "$HERE/review-watcher-lib.sh"
+rw_load_config
+
+owner="$1"; repo="$2"; pr="$3"; request_id="$4"; requester="$5"; requested_at="$6"
+# Same lock file as review-react: one session per PR, whatever its kind.
+lock="$RW_HOME/locks/${owner}__${repo}__${pr}.lock"
+mkdir -p "$RW_HOME/locks" "$RW_HOME/logs"
+exec 9>"$lock"
+flock -n 9 || { echo "review-pr: $owner/$repo#$pr already in flight, skipping" >&2; exit 0; }
+
+log="$RW_HOME/logs/${repo}-review-${pr}.log"
+# Left unseen on purpose: once setup installs the playbook, the next poll retries.
+if [ ! -f "$RW_HOME/review-playbook.md" ]; then
+  msg="review-pr: $RW_HOME/review-playbook.md is missing; run ~/bin/setup-review-watcher"
+  echo "$msg" | tee -a "$log" >&2; exit 0
+fi
+
+# Full owner/repo, so the prompt names the right repository rather than a bare name.
+prompt="$(rw_render_playbook "$RW_HOME/review-playbook.md" "$owner/$repo" "$pr" REVIEW_REQUESTED "$requester" "$requester")"
+# The session cannot see its own deadline; without the budget it cannot choose to
+# submit a partial verdict before `timeout` kills it.
+prompt="${prompt//'{{TIMEOUT_MIN}}'/$((REACTION_TIMEOUT / 60))}"
+# A reviewer never pushes, and its token can write to the repo; a dead pushurl
+# stops an accidental or injected `git push` from this worktree. Scoped to the
+# claude process, so the wrapper's own git calls are unaffected.
+cmd=(env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.pushurl GIT_CONFIG_VALUE_0=no-push
+     timeout "$REACTION_TIMEOUT" claude -p "$prompt"
+     --permission-mode bypassPermissions --verbose)
+
+if [ "${RW_DRY_RUN:-0}" = "1" ]; then
+  printf '%q ' "${cmd[@]}"; echo; exit 0
+fi
+
+wt=""
+rw_review_cleanup() {
+  cd /
+  # A failed removal must not abort the trap before the unassign runs.
+  [ -z "$wt" ] || rw_remove_worktree "$owner" "$repo" "$wt" || true
+  rw_unassign "$owner" "$repo" "$pr"
+}
+trap rw_review_cleanup EXIT
+# tmux kill-session delivers SIGHUP; route fatal signals through exit so the EXIT
+# trap still runs.
+trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
+rw_assign "$owner" "$repo" "$pr"
+
+# Detached at the PR head: a reviewer never pushes, so it needs no branch.
+wt="$(rw_prepare_worktree "$owner" "$repo" "$pr" review)"
+cd "$wt"
+# `gh repo clone` of a fork makes the parent gh's default repo, so unqualified gh
+# calls in the session (pr view, pr review, api repos/{owner}/{repo}) would act on
+# the parent's PR of the same number. GH_REPO pins them to the PR's repo.
+export GH_REPO="$owner/$repo"
+
+rc=0
+"${cmd[@]}" 2>&1 | tee -a "$log" || rc=$?
+[ "$rc" = 0 ] || echo "review-pr: session for $owner/$repo#$pr exited $rc (failed or timed out)" >&2
+
+# The session's exit status says nothing about whether it submitted a verdict, so
+# ask GitHub, even after a failed or timed-out exit: the verdict may have landed first. No verdict means the next poll retries the same request.
+if rw_review_landed "$owner" "$repo" "$pr" "$requested_at"; then
+  rw_mark_request_seen "$owner" "$repo" "$pr" "$request_id"
+else
+  echo "review-pr: no review from @$RW_BOT_LOGIN on $owner/$repo#$pr since $requested_at; leaving unseen for retry" >&2
+fi
