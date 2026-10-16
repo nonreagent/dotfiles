@@ -42,11 +42,9 @@ checkout (the mac edit→build loop), point it at one:
 
 ## Install (on an exe.dev VM)
 
-    git clone https://github.com/nonreagent/dotfiles ~/.dotfiles
-    cd ~/.dotfiles
-    ./install.sh
-    gh auth login                 # as @nonreagent
-    ~/.claude/sync-plugins.sh     # install enabled Claude plugins
+    curl -fsSL https://raw.githubusercontent.com/nonreagent/dotfiles/main/setup.sh | bash
+
+`setup.sh` clones this repo to `~/.dotfiles`, runs `install.sh`, logs `gh` in as @nonreagent if it isn't already, syncs Claude plugins, and on the first run only installs the review watcher. Re-run `~/.dotfiles/setup.sh` any time (`--dry-run` previews); every step skips when it already holds. `scripts/new-exe-box.sh` in `nonrational/dotfiles` creates the VM, hands over the `gh` token, and runs this line.
 
 `./deploy.sh audit` reports drift (missing links, edited-in-place files) against
 the manifest at any time.

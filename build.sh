@@ -256,6 +256,11 @@ chmod +x "$REPO/deploy.sh"
 mkdir -p "$REPO/scripts"
 cp "$DOTFILES/scripts/host-id.sh" "$REPO/scripts/host-id.sh"
 
+# setup.sh sources the shared step harness; like host-id.sh it lives outside
+# home/, so vendor it by explicit copy.
+cp "$DOTFILES/scripts/setup-lib.sh" "$REPO/scripts/setup-lib.sh"
+chmod +x "$REPO/scripts/setup-lib.sh"
+
 # deploy.sh and install.sh both whitespace-split the generated manifest, so a
 # home/ path containing a space/tab would silently mis-split. Fail loudly here.
 if ( cd "$OUT" && find . \( -type f -o -type l \) ) | grep -q '[[:space:]]'; then
