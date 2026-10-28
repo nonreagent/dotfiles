@@ -47,6 +47,9 @@ home/.agents/rules/prudence.md
 # find-inspiration is the human's manual curation loop, not an agent tool.
 home/.agents/skills
 !home/.agents/skills/find-inspiration
+# speak is macOS-only (afplay). Its hooks stay: settings.json references them,
+# and without the flag the skill sets they exit 0.
+!home/.agents/skills/speak
 # Eval suites are authoring-time test material for the skills' maintainer; the
 # agent never runs them, and they are most of the skills tree by file count.
 !home/.agents/skills/*/evals
