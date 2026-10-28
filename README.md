@@ -40,6 +40,12 @@ checkout (the mac edit→build loop), point it at one:
 
 `SOURCE_REPO=<url> ./build.sh` overrides which repo gets cloned.
 
+To see how an unmerged upstream PR (or branch) lands here before it merges:
+
+    scripts/upstream-check.sh <PR number | branch>
+
+It builds the change and its merge-base in a throwaway worktree, runs the `./test/run.sh` gate against the change, loads the built tmux config, and prints the diff the change makes to `home/` and `manifest`. It never touches the live checkout.
+
 ## Install (on an exe.dev VM)
 
     git clone https://github.com/nonreagent/dotfiles ~/.dotfiles
