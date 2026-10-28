@@ -145,6 +145,16 @@ test_manifest_covers_home() {
   [ "$a" = "$b" ] || { echo "  manifest != home/ file set" >&2; return 1; }
 }
 
+# A hook whose script the allowlist excluded would fail on every event it fires on.
+test_hooks_resolve() {
+  local cmd rc=0
+  while IFS= read -r cmd; do
+    case "$cmd" in "~/"*) ;; *) continue ;; esac
+    [ -f "$REPO/home/${cmd#\~/}" ] || { echo "  unvendored hook: $cmd" >&2; rc=1; }
+  done < <(jq -r '.hooks[]?[]?.hooks[]?.command | split(" ")[0]' "$REPO/home/.claude/settings.json")
+  return "$rc"
+}
+
 test_deploy_apply() {
   local tmp rc=0 rel; tmp="$(mktemp -d)"
   HOME="$tmp" "$REPO/install.sh" >/dev/null 2>&1 || { rm -rf "$tmp"; return 1; }
@@ -174,6 +184,7 @@ check test_allowlist_resolves
 check test_excluded_symlink_guard
 check test_symlink_policy
 check test_manifest_covers_home
+check test_hooks_resolve
 check test_deploy_apply
 echo "----"
 echo "$pass passed, $failc failed"

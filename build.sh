@@ -219,6 +219,24 @@ cp "$OVERLAY/claude-CLAUDE.md" "$OUT/.claude/CLAUDE.md"
 cp "$OVERLAY/exe.md"           "$OUT/.claude/exe.md"
 cp "$OVERLAY/identity.md"      "$OUT/.claude/identity.md"
 
+# 4b. Drop settings.json hook commands whose script the allowlist excluded, or
+#     every event they fire on would report a missing file. Then prune the
+#     groups and events left empty. Rewrite only when something is missing, so
+#     an untouched file stays byte-identical to upstream.
+settings="$OUT/.claude/settings.json"
+missing="$(jq -r '.hooks[]?[]?.hooks[]?.command' "$settings" | while IFS= read -r cmd; do
+  script="${cmd%% *}"
+  case "$script" in "~/"*) [ -f "$OUT/${script#\~/}" ] || printf '%s\n' "$cmd" ;; esac
+done | jq -R . | jq -s .)"
+if [ "$missing" != "[]" ]; then
+  jq --indent 2 --argjson missing "$missing" '
+    .hooks |= (map_values(
+      map(.hooks |= map(select(.command as $c | $missing | index($c) | not)))
+      | map(select(.hooks | length > 0))
+    ) | with_entries(select(.value | length > 0)))
+  ' "$settings" > "$settings.tmp" && mv "$settings.tmp" "$settings"
+fi
+
 # 5. Append overlay: every file under overlay/append/ is appended verbatim (after
 #    a blank-line separator) to the same-named vendored file. The content lives in
 #    those files, not here — to change what the agent's shell or tmux gets, edit
