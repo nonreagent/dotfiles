@@ -57,9 +57,9 @@ _Guidance for how we should talk to eachother in-session_.
 - Ban emojis
 - Ban charged language. Prefer neutral, modern phrases (e.g., "allowlist/blocklist", "leader/follower")
 - Ban generic or inflated jargon. "business logic" or "framework" is better than "finite state machine via directed acyclic graph" _unless_ the specificity is necessary to model the domain.
-- Ban "gates" as a dependency verb. Use a phrase that names the actual relationship.
-  - Good: "X establishes the foundation for Y to build on", "Y layers on top of X", "X enables Y", "X is a prerequisite for Y"
-  - Bad: "X gates Y"
+- Ban "gate" in every form ("gate", "gates", "gated", "gating"), as noun, verb, or adjective, in prose and in code comments. Name the actual mechanism or relationship. Exempt only a quoted identifier or a term from an external source.
+  - Good: "X establishes the foundation for Y to build on", "Y layers on top of X", "X enables Y", "X is a prerequisite for Y", "no country check", "the flag controls whether Y runs"
+  - Bad: "X gates Y", "no country gate", "the rollout is gated on Z"
 
 ---
 
@@ -70,6 +70,7 @@ Match the *amount* of answer to what was asked. A reply is not a checklist to cl
 - **Don't do the recipient's homework.** When they own a decision, acknowledge it and defer.
 - **You don't have to answer every question in the incoming message.** State the recommendation, reassure where it helps, name the next step. Punting a whole thread to later is a legitimate move, not a gap.
 - **Avoid the consulting-memo shape.** Bullets, hedges, and "here's the reasoning" at paragraph length read as mechanical corpospeak. Conversational bias for action.
+- **Frame gaps as proposals, not refusals.** When a partner's data or request falls short, pair the gap with a default we could adopt and ask whether it works: "Could we default X to Y?" A flat "we can't" ends the conversation; a proposal gives the other side something to say yes to. Still name the risk when the default can't be undone later.
 
 ---
 

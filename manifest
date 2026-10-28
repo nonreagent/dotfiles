@@ -100,6 +100,12 @@ home/.claude/hooks/.keep	~/.claude/hooks/.keep
 home/.claude/hooks/record-session-cost.sh	~/.claude/hooks/record-session-cost.sh
 home/.claude/hooks/record-turn-end.sh	~/.claude/hooks/record-turn-end.sh
 home/.claude/hooks/ring-tmux-bell.sh	~/.claude/hooks/ring-tmux-bell.sh
+home/.claude/hooks/speak/README.md	~/.claude/hooks/speak/README.md
+home/.claude/hooks/speak/speak-context.sh	~/.claude/hooks/speak/speak-context.sh
+home/.claude/hooks/speak/speak-response.py	~/.claude/hooks/speak/speak-response.py
+home/.claude/hooks/speak/speak-response.sh	~/.claude/hooks/speak/speak-response.sh
+home/.claude/hooks/speak/speak-toggle.sh	~/.claude/hooks/speak/speak-toggle.sh
+home/.claude/hooks/speak/stop-speech.sh	~/.claude/hooks/speak/stop-speech.sh
 home/.claude/identity.md	~/.claude/identity.md
 home/.claude/output-styles/.keep	~/.claude/output-styles/.keep
 home/.claude/plugins/.keep	~/.claude/plugins/.keep
