@@ -6,7 +6,7 @@ rw_load_config
 
 owner="$1"; repo="$2"; pr="$3"; review_id="$4"; state="$5"; reviewer="$6"
 lock="$RW_HOME/locks/${owner}__${repo}__${pr}.lock"
-mkdir -p "$RW_HOME/locks" "$RW_HOME/logs" "$RW_HOME/repos/$owner"
+mkdir -p "$RW_HOME/locks" "$RW_HOME/logs"
 exec 9>"$lock"
 flock -n 9 || { echo "review-react: $owner/$repo#$pr already in flight, skipping" >&2; exit 0; }
 
@@ -23,23 +23,28 @@ if [ "${RW_DRY_RUN:-0}" = "1" ]; then
   printf '%q ' "${cmd[@]}"; echo; exit 0
 fi
 
-clone="$RW_HOME/repos/$owner/$repo"
-if [ -d "$clone/.git" ]; then
-  git -C "$clone" fetch --quiet origin
-  # A prior reaction can leave the clone dirty (e.g. an agent ran build.sh without
-  # committing the result). An uncommitted tree blocks checkout below, which exits
-  # via set -e before rw_mark_seen runs — so the poll loop retries the same review
-  # forever. Force the clone clean every time so that can't happen.
-  git -C "$clone" reset --quiet --hard HEAD
-  git -C "$clone" clean --quiet -fd
-else
-  gh repo clone "$owner/$repo" "$clone" -- --quiet
-fi
-cd "$clone"
-gh pr checkout "$pr" >/dev/null 2>&1 || {
-  git fetch --quiet origin "pull/$pr/head"
-  git checkout --quiet FETCH_HEAD
+wt=""
+rw_react_cleanup() {
+  cd /
+  [ -z "$wt" ] || rw_remove_worktree "$owner" "$repo" "$wt" || true
+  rw_unassign "$owner" "$repo" "$pr"
 }
+trap rw_react_cleanup EXIT
+# tmux kill-session delivers SIGHUP; route fatal signals through exit so the EXIT
+# trap still runs.
+trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
+
+rw_assign "$owner" "$repo" "$pr"
+wt="$(rw_prepare_worktree "$owner" "$repo" "$pr" pr)"
+cd "$wt"
+# `gh repo clone` of a fork makes the parent gh's default repo, so unqualified gh
+# calls in the session (pr view, pr checkout, api repos/{owner}/{repo}) would act on
+# the parent's PR of the same number. GH_REPO pins them to the PR's repo.
+export GH_REPO="$owner/$repo"
+# A named branch, so the agent's push lands on the PR. --force resets a local
+# branch an earlier session left behind to the PR's current head.
+gh pr checkout "$pr" --force >/dev/null 2>&1 \
+  || echo "review-react: gh pr checkout failed; staying detached at the PR head" >&2
 
 "${cmd[@]}" 2>&1 | tee -a "$log" || {
   echo "review-react: reaction on $owner/$repo#$pr failed or timed out; leaving unseen for retry" >&2

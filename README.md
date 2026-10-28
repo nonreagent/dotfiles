@@ -59,8 +59,11 @@ Autonomously react to PR reviews on @nonreagent's open PRs. One-time setup on th
 
 Observe: `journalctl -u review-watcher -f` · attach reactions: `tmux -S ~/.review-watcher/tmux.sock attach`.
 Pause: `touch ~/.review-watcher/PAUSED` or `sudo systemctl stop review-watcher`.
+
+Reviews: request a review from @nonreagent on a PR by an allowlisted author and the watcher launches a reviewer session that approves or requests changes; re-request for another pass. While any watcher session works a PR, @nonreagent is its assignee, so `assignee:nonreagent` lists the PRs in flight. The sweep clears any @nonreagent assignment without a live session, including ones made by hand. After upgrading, run `~/bin/setup-review-watcher` to install the review playbook, then `sudo systemctl restart review-watcher` to load the new code (enabling a running service does not restart it; the restart kills in-flight sessions, whose traps unassign and whose work retries on the next poll).
+
 Expired `claude` login: the watcher holds reactions and the journal names the fix (`claude auth login`); reactions resume on the next poll after you log in.
-Design + plan: `docs/superpowers/specs/2026-07-08-review-watcher-design.md`, `docs/superpowers/plans/2026-07-08-review-watcher.md`.
+Design + plan: `docs/superpowers/specs/2026-07-08-review-watcher-design.md`, `docs/superpowers/plans/2026-07-08-review-watcher.md`, `docs/superpowers/specs/2026-10-14-review-watcher-reviewer-design.md`, `docs/superpowers/plans/2026-10-14-review-watcher-reviewer.md`.
 
 ### Clipboard bridge
 
